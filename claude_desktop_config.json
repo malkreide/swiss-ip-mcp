@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "swiss-ip": {
+      "command": "uvx",
+      "args": ["swiss-ip-mcp"],
+      "env": {
+        "IGE_USERNAME": "DEIN_IGE_BENUTZERNAME",
+        "IGE_PASSWORD": "DEIN_IGE_PASSWORT"
+      }
+    }
+  }
+}
