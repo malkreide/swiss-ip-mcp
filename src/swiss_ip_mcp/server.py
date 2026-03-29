@@ -17,6 +17,7 @@ import os
 import time
 import xml.etree.ElementTree as ET
 import xml.sax.saxutils as saxutils
+from enum import StrEnum
 from typing import Optional
 
 import httpx
@@ -60,11 +61,11 @@ async def _get_token(client: httpx.AsyncClient) -> str:
 
     if not username or not password:
         raise ValueError(
-            "IGE credentials missing. "
-            "Set IGE_USERNAME and IGE_PASSWORD environment variables. "
-            "After signing the IGE usage terms (https://www.ige.ch/de/"
+            "IGE-Zugangsdaten fehlen. "
+            "Bitte IGE_USERNAME und IGE_PASSWORD als Umgebungsvariablen setzen. "
+            "Nach Unterzeichnung der IGE-Nutzungsbedingungen (https://www.ige.ch/de/"
             "uebersicht-dienstleistungen/digitales-angebot/ip-daten/"
-            "datenabgabe-api), you will receive login credentials."
+            "datenabgabe-api) erhalten Sie die Zugangsdaten."
         )
 
     now = time.time()
@@ -288,31 +289,39 @@ def _parse_result_page(root: ET.Element) -> dict:
 
 
 def _handle_error(e: Exception) -> str:
-    """Format API errors into actionable messages."""
+    """Formatiert API-Fehler in verständliche Meldungen."""
     if isinstance(e, ValueError):
-        return f"Configuration error: {e}"
+        return f"Konfigurationsfehler: {e}"
     if isinstance(e, httpx.HTTPStatusError):
         status = e.response.status_code
         if status == 401:
             return (
-                "Authentication failed (401). "
-                "Check IGE_USERNAME and IGE_PASSWORD. "
-                "Credentials are provided after signing the IGE usage terms."
+                "Fehler 401: Authentifizierung fehlgeschlagen. "
+                "Bitte IGE_USERNAME und IGE_PASSWORD prüfen."
             )
         if status == 403:
             return (
-                "Access denied (403). Your account may not have API access. "
-                "Ensure the usage terms are signed and credentials are valid."
+                "Fehler 403: Zugriff verweigert. Möglicherweise fehlt der API-Zugang. "
+                "Bitte Nutzungsbedingungen prüfen."
             )
         if status == 429:
             return (
-                "Rate limit / quota exceeded (429). "
-                "Use swiss_ip_get_quota to check remaining quota."
+                "Fehler 429: Rate-Limit / Kontingent überschritten. "
+                "Mit swiss_ip_get_quota das verbleibende Kontingent prüfen."
             )
-        return f"API error {status}: {e.response.text[:500]}"
+        return f"API-Fehler {status}: {e.response.text[:500]}"
     if isinstance(e, httpx.TimeoutException):
-        return "Request timed out. The Swissreg API can be slow; try again."
-    return f"Unexpected error ({type(e).__name__}): {e}"
+        return "Fehler: Anfrage hat das Timeout überschritten. Bitte erneut versuchen."
+    return f"Unerwarteter Fehler ({type(e).__name__}): {e}"
+
+
+# ---------------------------------------------------------------------------
+# Enums
+# ---------------------------------------------------------------------------
+
+class ResponseFormat(StrEnum):
+    MARKDOWN = "markdown"
+    JSON = "json"
 
 
 # ---------------------------------------------------------------------------
@@ -339,26 +348,29 @@ class TrademarkSearchInput(BaseModel):
     query: str = Field(
         ...,
         description=(
-            "Free-text search term. Wildcards (*) supported. "
-            "Examples: 'Zürich*', 'apple', 'Bank*'. "
-            "Special chars must be meaningful (not just *)."
+            "Freitext-Suchbegriff. Wildcards (*) möglich. "
+            "Beispiele: 'Zürich*', 'apple', 'Bank*'."
         ),
         min_length=1,
         max_length=200,
     )
     page_size: int = Field(
         default=10,
-        description="Number of results per page (1–50).",
+        description="Anzahl Ergebnisse pro Seite (1–50).",
         ge=1,
         le=50,
     )
     page_token: Optional[str] = Field(
         default=None,
-        description="Pagination token from a previous response's next_page_token.",
+        description="Paginierungs-Token aus dem vorherigen next_page_token.",
     )
     sort_descending: bool = Field(
         default=True,
-        description="Sort by last update descending (newest first) if True.",
+        description="Nach letzter Aktualisierung absteigend sortieren (neueste zuerst).",
+    )
+    response_format: ResponseFormat = Field(
+        default=ResponseFormat.MARKDOWN,
+        description="Ausgabeformat: 'markdown' oder 'json'",
     )
 
 
@@ -368,14 +380,18 @@ class TrademarkOwnerSearchInput(BaseModel):
     owner_name: str = Field(
         ...,
         description=(
-            "Name of the trademark owner / applicant. "
-            "Wildcards (*) supported. Example: 'Nestlé*', 'Google*'."
+            "Name des Markeninhabers / Anmelders. "
+            "Wildcards (*) möglich. Beispiel: 'Nestlé*', 'Google*'."
         ),
         min_length=1,
         max_length=200,
     )
     page_size: int = Field(default=10, ge=1, le=50)
     page_token: Optional[str] = Field(default=None)
+    response_format: ResponseFormat = Field(
+        default=ResponseFormat.MARKDOWN,
+        description="Ausgabeformat: 'markdown' oder 'json'",
+    )
 
 
 class TrademarkNumberInput(BaseModel):
@@ -384,11 +400,15 @@ class TrademarkNumberInput(BaseModel):
     trademark_number: str = Field(
         ...,
         description=(
-            "Swiss trademark application or registration number. "
-            "Examples: 'P-756123', '756123'."
+            "Schweizer Marken-Anmelde- oder Registernummer. "
+            "Beispiele: 'P-756123', '756123'."
         ),
         min_length=1,
         max_length=50,
+    )
+    response_format: ResponseFormat = Field(
+        default=ResponseFormat.MARKDOWN,
+        description="Ausgabeformat: 'markdown' oder 'json'",
     )
 
 
@@ -398,19 +418,23 @@ class TrademarkClassInput(BaseModel):
     nice_class: int = Field(
         ...,
         description=(
-            "Nice Classification class number (1–45). "
-            "Example: 9 = computers/software, 35 = advertising/business, "
-            "41 = education/training."
+            "Nizza-Klassifikation Klassennummer (1–45). "
+            "Beispiel: 9 = Computer/Software, 35 = Werbung/Geschäftswesen, "
+            "41 = Erziehung/Ausbildung."
         ),
         ge=1,
         le=45,
     )
     query: Optional[str] = Field(
         default=None,
-        description="Optional additional text filter within the class.",
+        description="Optionaler zusätzlicher Textfilter innerhalb der Klasse.",
     )
     page_size: int = Field(default=10, ge=1, le=50)
     page_token: Optional[str] = Field(default=None)
+    response_format: ResponseFormat = Field(
+        default=ResponseFormat.MARKDOWN,
+        description="Ausgabeformat: 'markdown' oder 'json'",
+    )
 
 
 class PatentSearchInput(BaseModel):
@@ -419,8 +443,8 @@ class PatentSearchInput(BaseModel):
     query: str = Field(
         ...,
         description=(
-            "Free-text search for Swiss patents. Wildcards (*) supported. "
-            "Examples: 'solar energy*', 'Novartis', 'machine learning'."
+            "Freitext-Suche für Schweizer Patente. Wildcards (*) möglich. "
+            "Beispiele: 'solar energy*', 'Novartis', 'machine learning'."
         ),
         min_length=1,
         max_length=200,
@@ -428,6 +452,10 @@ class PatentSearchInput(BaseModel):
     page_size: int = Field(default=10, ge=1, le=50)
     page_token: Optional[str] = Field(default=None)
     sort_descending: bool = Field(default=True)
+    response_format: ResponseFormat = Field(
+        default=ResponseFormat.MARKDOWN,
+        description="Ausgabeformat: 'markdown' oder 'json'",
+    )
 
 
 class PatentNumberInput(BaseModel):
@@ -436,10 +464,14 @@ class PatentNumberInput(BaseModel):
     patent_number: str = Field(
         ...,
         description=(
-            "Swiss patent number. Examples: 'CH123456', '123456'."
+            "Schweizer Patentnummer. Beispiele: 'CH123456', '123456'."
         ),
         min_length=1,
         max_length=50,
+    )
+    response_format: ResponseFormat = Field(
+        default=ResponseFormat.MARKDOWN,
+        description="Ausgabeformat: 'markdown' oder 'json'",
     )
 
 
@@ -449,14 +481,18 @@ class PatentApplicantInput(BaseModel):
     applicant_name: str = Field(
         ...,
         description=(
-            "Name of the patent applicant or inventor. "
-            "Wildcards (*) supported. Examples: 'ABB*', 'ETH Zürich*'."
+            "Name des Patentanmelders oder Erfinders. "
+            "Wildcards (*) möglich. Beispiele: 'ABB*', 'ETH Zürich*'."
         ),
         min_length=1,
         max_length=200,
     )
     page_size: int = Field(default=10, ge=1, le=50)
     page_token: Optional[str] = Field(default=None)
+    response_format: ResponseFormat = Field(
+        default=ResponseFormat.MARKDOWN,
+        description="Ausgabeformat: 'markdown' oder 'json'",
+    )
 
 
 class DateRangeInput(BaseModel):
@@ -465,23 +501,27 @@ class DateRangeInput(BaseModel):
     ip_type: str = Field(
         ...,
         description=(
-            "Type of IP right to search: 'trademark', 'patent', "
-            "'patent_publication', or 'spc'."
+            "Art des Schutzrechts: 'trademark', 'patent', "
+            "'patent_publication' oder 'spc'."
         ),
         pattern="^(trademark|patent|patent_publication|spc)$",
     )
     date_from: str = Field(
         ...,
-        description="Start date in ISO format YYYY-MM-DD (inclusive).",
+        description="Startdatum im ISO-Format YYYY-MM-DD (inklusive).",
         pattern=r"^\d{4}-\d{2}-\d{2}$",
     )
     date_to: str = Field(
         ...,
-        description="End date in ISO format YYYY-MM-DD (exclusive).",
+        description="Enddatum im ISO-Format YYYY-MM-DD (exklusive).",
         pattern=r"^\d{4}-\d{2}-\d{2}$",
     )
     page_size: int = Field(default=10, ge=1, le=50)
     page_token: Optional[str] = Field(default=None)
+    response_format: ResponseFormat = Field(
+        default=ResponseFormat.MARKDOWN,
+        description="Ausgabeformat: 'markdown' oder 'json'",
+    )
 
 
 class SpcSearchInput(BaseModel):
@@ -490,14 +530,18 @@ class SpcSearchInput(BaseModel):
     query: str = Field(
         ...,
         description=(
-            "Search term for Supplementary Protection Certificates (SPC / ESZ). "
-            "Wildcards (*) supported. Examples: 'Novartis', 'ibuprofen*'."
+            "Suchbegriff für Ergänzende Schutzzertifikate (ESZ / SPC). "
+            "Wildcards (*) möglich. Beispiele: 'Novartis', 'ibuprofen*'."
         ),
         min_length=1,
         max_length=200,
     )
     page_size: int = Field(default=10, ge=1, le=50)
     page_token: Optional[str] = Field(default=None)
+    response_format: ResponseFormat = Field(
+        default=ResponseFormat.MARKDOWN,
+        description="Ausgabeformat: 'markdown' oder 'json'",
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -507,7 +551,7 @@ class SpcSearchInput(BaseModel):
 @mcp.tool(
     name="swiss_ip_search_trademarks",
     annotations={
-        "title": "Search Swiss Trademarks",
+        "title": "Schweizer Marken suchen",
         "readOnlyHint": True,
         "destructiveHint": False,
         "idempotentHint": True,
@@ -515,25 +559,19 @@ class SpcSearchInput(BaseModel):
     },
 )
 async def swiss_ip_search_trademarks(params: TrademarkSearchInput) -> str:
-    """Search the Swiss trademark register (Markenregister) by free text.
-
-    Use this to find trademarks by name, brand term, or keyword. Supports
-    wildcard (*) searches. Returns registration status, owner, filing dates,
-    Nice classes, and more.
+    """Durchsucht das Schweizer Markenregister nach Freitext.
+    Findet Marken nach Name, Markenbegriff oder Stichwort. Wildcards (*) möglich.
 
     Args:
-        params (TrademarkSearchInput):
-            - query (str): Search term, e.g. 'Zürich*', 'apple', 'Bank*'
-            - page_size (int): Results per page (1–50, default 10)
-            - page_token (str): Pagination token for subsequent pages
-            - sort_descending (bool): Sort newest first (default True)
+        params (TrademarkSearchInput): Enthält:
+            - query (str): Suchbegriff, z.B. 'Zürich*', 'apple', 'Bank*'
+            - page_size (int): Ergebnisse pro Seite (1–50, Standard 10)
+            - page_token (str): Paginierungs-Token für Folgeseiten
+            - sort_descending (bool): Neueste zuerst (Standard True)
+            - response_format (str): 'markdown' oder 'json'
 
     Returns:
-        str: JSON with keys:
-            - total (str|None): Total matching records
-            - count (int): Items in this page
-            - items (list[dict]): Trademark records
-            - next_page_token (str|None): Token for next page
+        str: Ergebnis mit total, count, items, next_page_token
     """
     sort_dir = "Descending" if params.sort_descending else "Ascending"
     query_xml = f"<Any>{_esc(params.query)}</Any>"
@@ -551,7 +589,7 @@ async def swiss_ip_search_trademarks(params: TrademarkSearchInput) -> str:
 @mcp.tool(
     name="swiss_ip_search_trademarks_by_owner",
     annotations={
-        "title": "Search Swiss Trademarks by Owner",
+        "title": "Schweizer Marken nach Inhaber suchen",
         "readOnlyHint": True,
         "destructiveHint": False,
         "idempotentHint": True,
@@ -561,19 +599,18 @@ async def swiss_ip_search_trademarks(params: TrademarkSearchInput) -> str:
 async def swiss_ip_search_trademarks_by_owner(
     params: TrademarkOwnerSearchInput,
 ) -> str:
-    """Search Swiss trademarks filtered by owner / applicant name.
-
-    Useful for IP monitoring: find all trademarks held by a company or
-    individual. Supports wildcards (*).
+    """Durchsucht Schweizer Marken gefiltert nach Inhaber / Anmelder.
+    Nützlich für IP-Monitoring: alle Marken eines Unternehmens oder einer Person finden.
 
     Args:
-        params (TrademarkOwnerSearchInput):
-            - owner_name (str): Owner name, e.g. 'Nestlé*', 'Stadt Zürich*'
-            - page_size (int): Results per page (1–50)
-            - page_token (str): Pagination token
+        params (TrademarkOwnerSearchInput): Enthält:
+            - owner_name (str): Inhabername, z.B. 'Nestlé*', 'Stadt Zürich*'
+            - page_size (int): Ergebnisse pro Seite (1–50)
+            - page_token (str): Paginierungs-Token
+            - response_format (str): 'markdown' oder 'json'
 
     Returns:
-        str: JSON with total, count, items, next_page_token
+        str: Ergebnis mit total, count, items, next_page_token
     """
     # Trademark owner fields are searched via Any (the API's full-text field
     # covers holder/applicant names in the index).
@@ -592,7 +629,7 @@ async def swiss_ip_search_trademarks_by_owner(
 @mcp.tool(
     name="swiss_ip_get_trademark",
     annotations={
-        "title": "Get Swiss Trademark by Number",
+        "title": "Schweizer Marke nach Nummer abrufen",
         "readOnlyHint": True,
         "destructiveHint": False,
         "idempotentHint": True,
@@ -600,17 +637,16 @@ async def swiss_ip_search_trademarks_by_owner(
     },
 )
 async def swiss_ip_get_trademark(params: TrademarkNumberInput) -> str:
-    """Retrieve a specific Swiss trademark by its application/registration number.
-
-    Returns detailed record including status, goods/services classes,
-    opposition periods, and registration history.
+    """Ruft eine bestimmte Schweizer Marke anhand der Anmelde-/Registernummer ab.
+    Gibt detaillierten Datensatz inkl. Status, Waren-/Dienstleistungsklassen und Registrierungshistorie zurück.
 
     Args:
-        params (TrademarkNumberInput):
-            - trademark_number (str): Swiss trademark number, e.g. 'P-756123'
+        params (TrademarkNumberInput): Enthält:
+            - trademark_number (str): Schweizer Markennummer, z.B. 'P-756123'
+            - response_format (str): 'markdown' oder 'json'
 
     Returns:
-        str: JSON with total, count, items (single item), next_page_token
+        str: Ergebnis mit total, count, items (einzelner Eintrag), next_page_token
     """
     query_xml = f"<Id>{_esc(params.trademark_number)}</Id>"
     xml_body = _build_trademark_search(query_xml, page_size=1)
@@ -619,8 +655,8 @@ async def swiss_ip_get_trademark(params: TrademarkNumberInput) -> str:
         result = _parse_result_page(root)
         if result["count"] == 0:
             return json.dumps({
-                "error": f"Trademark '{params.trademark_number}' not found. "
-                         "Check the number format (e.g. 'P-756123')."
+                "error": f"Marke '{params.trademark_number}' nicht gefunden. "
+                         "Bitte Nummernformat prüfen (z.B. 'P-756123')."
             })
         return json.dumps(result, ensure_ascii=False, indent=2)
     except Exception as e:
@@ -630,7 +666,7 @@ async def swiss_ip_get_trademark(params: TrademarkNumberInput) -> str:
 @mcp.tool(
     name="swiss_ip_search_trademarks_by_class",
     annotations={
-        "title": "Search Swiss Trademarks by Nice Class",
+        "title": "Schweizer Marken nach Nizza-Klasse suchen",
         "readOnlyHint": True,
         "destructiveHint": False,
         "idempotentHint": True,
@@ -640,21 +676,19 @@ async def swiss_ip_get_trademark(params: TrademarkNumberInput) -> str:
 async def swiss_ip_search_trademarks_by_class(
     params: TrademarkClassInput,
 ) -> str:
-    """Search Swiss trademarks by Nice Classification class number.
-
-    Useful for competitive analysis within an industry sector.
-    Key classes: 9=software/electronics, 35=advertising/business services,
-    36=finance/insurance, 41=education/training, 42=technology services.
+    """Durchsucht Schweizer Marken nach Nizza-Klassifikation.
+    Nützlich für Wettbewerbsanalysen innerhalb einer Branche.
 
     Args:
-        params (TrademarkClassInput):
-            - nice_class (int): Nice class 1–45
-            - query (str): Optional additional text filter
-            - page_size (int): Results per page
-            - page_token (str): Pagination token
+        params (TrademarkClassInput): Enthält:
+            - nice_class (int): Nizza-Klasse 1–45
+            - query (str): Optionaler zusätzlicher Textfilter
+            - page_size (int): Ergebnisse pro Seite
+            - page_token (str): Paginierungs-Token
+            - response_format (str): 'markdown' oder 'json'
 
     Returns:
-        str: JSON with total, count, items, next_page_token
+        str: Ergebnis mit total, count, items, next_page_token
     """
     # Combine class filter with optional text query
     class_query = f"<Any>Klasse {params.nice_class}</Any>"
@@ -685,7 +719,7 @@ async def swiss_ip_search_trademarks_by_class(
 @mcp.tool(
     name="swiss_ip_search_patents",
     annotations={
-        "title": "Search Swiss Patents",
+        "title": "Schweizer Patente suchen",
         "readOnlyHint": True,
         "destructiveHint": False,
         "idempotentHint": True,
@@ -693,20 +727,19 @@ async def swiss_ip_search_trademarks_by_class(
     },
 )
 async def swiss_ip_search_patents(params: PatentSearchInput) -> str:
-    """Search the Swiss patent register (Patentregister) by free text.
-
-    Returns CH patent records including title, applicant, IPC classification,
-    filing/grant dates, and legal status.
+    """Durchsucht das Schweizer Patentregister nach Freitext.
+    Gibt CH-Patenteinträge inkl. Titel, Anmelder, IPC-Klassifikation, Daten und Rechtsstatus zurück.
 
     Args:
-        params (PatentSearchInput):
-            - query (str): Search term, e.g. 'solar energy*', 'Novartis'
-            - page_size (int): Results per page (1–50)
-            - page_token (str): Pagination token
-            - sort_descending (bool): Sort newest first
+        params (PatentSearchInput): Enthält:
+            - query (str): Suchbegriff, z.B. 'solar energy*', 'Novartis'
+            - page_size (int): Ergebnisse pro Seite (1–50)
+            - page_token (str): Paginierungs-Token
+            - sort_descending (bool): Neueste zuerst
+            - response_format (str): 'markdown' oder 'json'
 
     Returns:
-        str: JSON with total, count, items, next_page_token
+        str: Ergebnis mit total, count, items, next_page_token
     """
     sort_dir = "Descending" if params.sort_descending else "Ascending"
     query_xml = f"<Any>{_esc(params.query)}</Any>"
@@ -724,7 +757,7 @@ async def swiss_ip_search_patents(params: PatentSearchInput) -> str:
 @mcp.tool(
     name="swiss_ip_get_patent",
     annotations={
-        "title": "Get Swiss Patent by Number",
+        "title": "Schweizer Patent nach Nummer abrufen",
         "readOnlyHint": True,
         "destructiveHint": False,
         "idempotentHint": True,
@@ -732,17 +765,16 @@ async def swiss_ip_search_patents(params: PatentSearchInput) -> str:
     },
 )
 async def swiss_ip_get_patent(params: PatentNumberInput) -> str:
-    """Retrieve a specific Swiss patent by its number.
-
-    Returns full record including claims summary, IPC codes, applicant,
-    inventor, filing and grant dates, and current status.
+    """Ruft ein bestimmtes Schweizer Patent anhand seiner Nummer ab.
+    Gibt vollständigen Datensatz inkl. IPC-Codes, Anmelder, Erfinder und Status zurück.
 
     Args:
-        params (PatentNumberInput):
-            - patent_number (str): Swiss patent number, e.g. 'CH123456'
+        params (PatentNumberInput): Enthält:
+            - patent_number (str): Schweizer Patentnummer, z.B. 'CH123456'
+            - response_format (str): 'markdown' oder 'json'
 
     Returns:
-        str: JSON with total, count, items (single item), next_page_token
+        str: Ergebnis mit total, count, items (einzelner Eintrag), next_page_token
     """
     query_xml = f"<Id>{_esc(params.patent_number)}</Id>"
     xml_body = _build_patent_search(query_xml, page_size=1)
@@ -752,8 +784,8 @@ async def swiss_ip_get_patent(params: PatentNumberInput) -> str:
         if result["count"] == 0:
             return json.dumps({
                 "error": (
-                    f"Patent '{params.patent_number}' not found. "
-                    "Check the format (e.g. 'CH700123' or '700123')."
+                    f"Patent '{params.patent_number}' nicht gefunden. "
+                    "Bitte Format prüfen (z.B. 'CH700123' oder '700123')."
                 )
             })
         return json.dumps(result, ensure_ascii=False, indent=2)
@@ -764,7 +796,7 @@ async def swiss_ip_get_patent(params: PatentNumberInput) -> str:
 @mcp.tool(
     name="swiss_ip_search_patents_by_applicant",
     annotations={
-        "title": "Search Swiss Patents by Applicant",
+        "title": "Schweizer Patente nach Anmelder suchen",
         "readOnlyHint": True,
         "destructiveHint": False,
         "idempotentHint": True,
@@ -774,19 +806,18 @@ async def swiss_ip_get_patent(params: PatentNumberInput) -> str:
 async def swiss_ip_search_patents_by_applicant(
     params: PatentApplicantInput,
 ) -> str:
-    """Search Swiss patents by applicant or inventor name.
-
-    Useful for competitive intelligence and innovation monitoring.
-    Shows what organisations are patenting in Switzerland.
+    """Durchsucht Schweizer Patente nach Anmelder oder Erfinder.
+    Nützlich für Wettbewerbsanalyse und Innovationsmonitoring.
 
     Args:
-        params (PatentApplicantInput):
-            - applicant_name (str): Name, e.g. 'ABB*', 'ETH Zürich*', 'Roche*'
-            - page_size (int): Results per page
-            - page_token (str): Pagination token
+        params (PatentApplicantInput): Enthält:
+            - applicant_name (str): Name, z.B. 'ABB*', 'ETH Zürich*', 'Roche*'
+            - page_size (int): Ergebnisse pro Seite
+            - page_token (str): Paginierungs-Token
+            - response_format (str): 'markdown' oder 'json'
 
     Returns:
-        str: JSON with total, count, items, next_page_token
+        str: Ergebnis mit total, count, items, next_page_token
     """
     query_xml = f"<Any>{_esc(params.applicant_name)}</Any>"
     xml_body = _build_patent_search(
@@ -803,7 +834,7 @@ async def swiss_ip_search_patents_by_applicant(
 @mcp.tool(
     name="swiss_ip_search_patent_publications",
     annotations={
-        "title": "Search Swiss Patent Publications",
+        "title": "Schweizer Patentpublikationen suchen",
         "readOnlyHint": True,
         "destructiveHint": False,
         "idempotentHint": True,
@@ -813,19 +844,18 @@ async def swiss_ip_search_patents_by_applicant(
 async def swiss_ip_search_patent_publications(
     params: PatentSearchInput,
 ) -> str:
-    """Search Swiss patent publication records (Patentpublikationen).
-
-    Patent publications are the official gazette entries for CH patent
-    applications. Useful for prior-art searches and innovation monitoring.
+    """Durchsucht Schweizer Patentpublikationen (offizielle Veröffentlichungen).
+    Nützlich für Stand-der-Technik-Recherchen und Innovationsmonitoring.
 
     Args:
-        params (PatentSearchInput):
-            - query (str): Search term
-            - page_size (int): Results per page
-            - page_token (str): Pagination token
+        params (PatentSearchInput): Enthält:
+            - query (str): Suchbegriff
+            - page_size (int): Ergebnisse pro Seite
+            - page_token (str): Paginierungs-Token
+            - response_format (str): 'markdown' oder 'json'
 
     Returns:
-        str: JSON with total, count, items, next_page_token
+        str: Ergebnis mit total, count, items, next_page_token
     """
     query_xml = f"<Any>{_esc(params.query)}</Any>"
     xml_body = _build_patent_pub_search(
@@ -846,7 +876,7 @@ async def swiss_ip_search_patent_publications(
 @mcp.tool(
     name="swiss_ip_search_spc",
     annotations={
-        "title": "Search Swiss Supplementary Protection Certificates (SPC/ESZ)",
+        "title": "Schweizer ESZ/SPC suchen",
         "readOnlyHint": True,
         "destructiveHint": False,
         "idempotentHint": True,
@@ -854,19 +884,18 @@ async def swiss_ip_search_patent_publications(
     },
 )
 async def swiss_ip_search_spc(params: SpcSearchInput) -> str:
-    """Search Swiss Supplementary Protection Certificates (SPC, also ESZ).
-
-    SPCs extend patent protection for medicinal or plant-protection products.
-    Relevant for pharmaceutical research, health policy, and procurement.
+    """Durchsucht Schweizer Ergänzende Schutzzertifikate (ESZ / SPC).
+    ESZ verlängern den Patentschutz für Arzneimittel und Pflanzenschutzmittel.
 
     Args:
-        params (SpcSearchInput):
-            - query (str): Search term, e.g. 'Novartis', 'ibuprofen*'
-            - page_size (int): Results per page
-            - page_token (str): Pagination token
+        params (SpcSearchInput): Enthält:
+            - query (str): Suchbegriff, z.B. 'Novartis', 'ibuprofen*'
+            - page_size (int): Ergebnisse pro Seite
+            - page_token (str): Paginierungs-Token
+            - response_format (str): 'markdown' oder 'json'
 
     Returns:
-        str: JSON with total, count, items (SPC records), next_page_token
+        str: Ergebnis mit total, count, items (ESZ-Einträge), next_page_token
     """
     query_xml = f"<Any>{_esc(params.query)}</Any>"
     xml_body = _build_spc_search(query_xml, params.page_size, params.page_token)
@@ -885,7 +914,7 @@ async def swiss_ip_search_spc(params: SpcSearchInput) -> str:
 @mcp.tool(
     name="swiss_ip_search_recent_filings",
     annotations={
-        "title": "Search Swiss IP Filings by Date Range",
+        "title": "Schweizer IP-Eintragungen nach Datumsbereich suchen",
         "readOnlyHint": True,
         "destructiveHint": False,
         "idempotentHint": True,
@@ -893,22 +922,20 @@ async def swiss_ip_search_spc(params: SpcSearchInput) -> str:
     },
 )
 async def swiss_ip_search_recent_filings(params: DateRangeInput) -> str:
-    """Search Swiss IP filings updated within a specific date range.
-
-    Supports trademarks, patents, patent publications, and SPC records.
-    Useful for monitoring recent IP activity, innovation dashboards, and
-    KI-Fachgruppe demos showing what's being filed in Switzerland.
+    """Durchsucht Schweizer IP-Eintragungen innerhalb eines Datumsbereichs.
+    Unterstützt Marken, Patente, Patentpublikationen und ESZ.
 
     Args:
-        params (DateRangeInput):
+        params (DateRangeInput): Enthält:
             - ip_type (str): 'trademark', 'patent', 'patent_publication', 'spc'
-            - date_from (str): Start date YYYY-MM-DD (inclusive)
-            - date_to (str): End date YYYY-MM-DD (exclusive)
-            - page_size (int): Results per page
-            - page_token (str): Pagination token
+            - date_from (str): Startdatum YYYY-MM-DD (inklusive)
+            - date_to (str): Enddatum YYYY-MM-DD (exklusive)
+            - page_size (int): Ergebnisse pro Seite
+            - page_token (str): Paginierungs-Token
+            - response_format (str): 'markdown' oder 'json'
 
     Returns:
-        str: JSON with total, count, items, next_page_token, date_range_used
+        str: Ergebnis mit total, count, items, next_page_token, date_range
     """
     query_xml = (
         f'<LastUpdate from="{_esc(params.date_from)}" '
@@ -948,7 +975,7 @@ async def swiss_ip_search_recent_filings(params: DateRangeInput) -> str:
 @mcp.tool(
     name="swiss_ip_get_quota",
     annotations={
-        "title": "Check IGE API Quota Usage",
+        "title": "IGE API-Kontingent prüfen",
         "readOnlyHint": True,
         "destructiveHint": False,
         "idempotentHint": True,
@@ -956,13 +983,11 @@ async def swiss_ip_search_recent_filings(params: DateRangeInput) -> str:
     },
 )
 async def swiss_ip_get_quota() -> str:
-    """Check the remaining data transfer quota for the IGE Swissreg API.
-
-    The API has a monthly data transfer quota. Use this tool to monitor
-    usage and avoid hitting limits.
+    """Prüft das verbleibende Datentransfer-Kontingent der IGE Swissreg API.
+    Die API hat ein monatliches Kontingent. Damit lässt sich die Nutzung überwachen.
 
     Returns:
-        str: JSON with quota details including used and remaining transfer volume
+        str: JSON mit Kontingent-Details inkl. genutztem und verbleibendem Volumen
     """
     try:
         root = await _call_api(_quota_request())
@@ -977,14 +1002,7 @@ async def swiss_ip_get_quota() -> str:
 # ---------------------------------------------------------------------------
 
 def main() -> None:
-    transport = os.getenv("MCP_TRANSPORT", "stdio")
-    if transport == "sse":
-        port = int(os.getenv("PORT", "8000"))
-        logger.info("Starting Swiss IP MCP server on SSE transport, port %d", port)
-        mcp.run(transport="sse", port=port)
-    else:
-        logger.info("Starting Swiss IP MCP server on stdio transport")
-        mcp.run()
+    mcp.run()
 
 
 if __name__ == "__main__":

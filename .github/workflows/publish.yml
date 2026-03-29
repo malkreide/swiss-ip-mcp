@@ -4,9 +4,6 @@ on:
   release:
     types: [published]
 
-permissions:
-  id-token: write  # Pflicht für Trusted Publisher (OIDC)
-
 jobs:
   build:
     name: Build distribution
@@ -18,7 +15,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.12"
+          python-version: "3.11"
 
       - name: Install build tools
         run: pip install build
@@ -26,7 +23,7 @@ jobs:
       - name: Build package
         run: python -m build
 
-      - name: Upload build artifacts
+      - name: Upload dist artifacts
         uses: actions/upload-artifact@v4
         with:
           name: dist
@@ -36,12 +33,12 @@ jobs:
     name: Publish to PyPI
     needs: build
     runs-on: ubuntu-latest
-    environment:
-      name: pypi
-      url: https://pypi.org/project/swiss-ip-mcp/
+    environment: pypi
+    permissions:
+      id-token: write   # OIDC-Token für Trusted Publisher
 
     steps:
-      - name: Download build artifacts
+      - name: Download dist artifacts
         uses: actions/download-artifact@v4
         with:
           name: dist
