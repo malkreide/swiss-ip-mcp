@@ -146,7 +146,7 @@ class TestXmlHelpers:
 class TestErrorHandler:
     def test_value_error(self):
         msg = _handle_error(ValueError("missing credentials"))
-        assert "Configuration error" in msg
+        assert "Konfigurationsfehler" in msg
         assert "missing credentials" in msg
 
     def test_timeout(self):
@@ -198,7 +198,7 @@ class TestTrademarkTools:
             result_str = await swiss_ip_get_trademark(params)
             result = json.loads(result_str)
             assert "error" in result
-            assert "not found" in result["error"].lower()
+            assert "nicht gefunden" in result["error"].lower()
 
     @pytest.mark.asyncio
     async def test_search_by_owner(self):
