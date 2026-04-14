@@ -18,6 +18,8 @@ It is the successor to [`patent-mcp`](https://github.com/malkreide/patent-mcp) a
 
 **This server is model-agnostic.** It works with Claude, GPT-4, Llama, and any other MCP-compatible client – not just Claude Desktop.
 
+![Demo: Claude querying the Swiss trademark register via swiss-ip-mcp](docs/assets/demo.svg)
+
 ---
 
 ## Example Queries
@@ -185,6 +187,17 @@ The CI workflow runs on Python 3.11, 3.12, and 3.13.
 ## Data Source
 
 All data is provided by the [IGE/IPI Swissreg Datadelivery API](https://www.swissreg.ch/public/apidocs/). The API is free after signing the usage terms, subject to a monthly data transfer quota. Check your remaining quota at any time using the `swiss_ip_get_quota` tool.
+
+---
+
+## Safety & Limits
+
+- **Read-only:** All tools perform authenticated POST requests to the Swissreg API — no data is written, modified, or deleted on any system.
+- **No personal data:** The API returns public IP register entries (trademark names, patent titles, applicant organisations). No personally identifiable information (PII) is processed or stored by this server beyond what the IGE API returns in its public records.
+- **Rate limits & quota:** The IGE Swissreg API enforces a monthly data transfer quota per account. Use the `swiss_ip_get_quota` tool to monitor remaining quota. The server enforces a 60s timeout per request. Avoid large `page_size` values (>20) for exploratory queries.
+- **Authentication:** Credentials (`IGE_USERNAME`, `IGE_PASSWORD`) are read from environment variables at runtime and never logged or persisted.
+- **Terms of service:** Data is subject to the [IGE Swissreg Datadelivery API terms of use](https://www.ige.ch/en/services/digital-resources/ip-data/data-delivery-api). A signed usage agreement with IGE/IPI is required before API access is granted.
+- **No guarantees:** This server is a community project, not affiliated with the Swiss Federal Institute of Intellectual Property (IGE/IPI). Availability depends on upstream API uptime.
 
 ---
 

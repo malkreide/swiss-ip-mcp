@@ -18,6 +18,8 @@ Er ist der Nachfolger von [`patent-mcp`](https://github.com/malkreide/patent-mcp
 
 **Dieser Server ist modell-agnostisch.** Er funktioniert mit Claude, GPT-4, Llama und jedem anderen MCP-kompatiblen Client – nicht nur mit Claude Desktop.
 
+![Demo: Claude fragt das Schweizer Markenregister via swiss-ip-mcp ab](docs/assets/demo.svg)
+
 ---
 
 ## Anwendungsbeispiele
@@ -168,6 +170,17 @@ IGE_USERNAME=... IGE_PASSWORD=... PYTHONPATH=src pytest tests/ -v
 ```
 
 Der CI-Workflow läuft auf Python 3.11, 3.12 und 3.13.
+
+---
+
+## Sicherheit & Grenzen
+
+- **Nur-Lesen:** Alle Tools führen authentifizierte POST-Anfragen an die Swissreg API durch — es werden keine Daten geschrieben, verändert oder gelöscht.
+- **Keine Personendaten:** Die API liefert öffentliche Registereinträge (Markennamen, Patentsachtitel, Anmelderorganisationen). Keine personenbezogenen Daten werden durch diesen Server verarbeitet oder gespeichert — ausser den Inhalten, die die IGE API in ihren öffentlichen Registern zurückgibt.
+- **Rate Limits & Kontingent:** Die IGE Swissreg API erzwingt ein monatliches Datentransfer-Kontingent pro Account. Mit dem Tool `swiss_ip_get_quota` lässt sich das verbleibende Kontingent prüfen. Der Server erzwingt ein 60-Sekunden-Timeout pro Anfrage. Für Erkundungsabfragen empfiehlt sich `page_size` ≤ 20.
+- **Authentifizierung:** Zugangsdaten (`IGE_USERNAME`, `IGE_PASSWORD`) werden zur Laufzeit aus Umgebungsvariablen gelesen und weder protokolliert noch gespeichert.
+- **Nutzungsbedingungen:** Die Daten unterliegen den [Nutzungsbedingungen der IGE Swissreg Datadelivery API](https://www.ige.ch/de/uebersicht-dienstleistungen/digitales-angebot/ip-daten/datenabgabe-api). Für den API-Zugang ist eine unterzeichnete Nutzungsvereinbarung mit dem IGE/IPI erforderlich.
+- **Keine Gewähr:** Dieses Projekt ist eine Community-Initiative ohne Verbindung zum Eidgenössischen Institut für Geistiges Eigentum (IGE/IPI). Die Verfügbarkeit hängt vom Upstream-API-Betrieb ab.
 
 ---
 
