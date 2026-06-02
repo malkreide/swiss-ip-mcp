@@ -1,0 +1,2 @@
+server_name,audit_status,findings,last_audit_run,last_audit_at,production_ready,released_version,notes
+swiss-ip-mcp,Findings dokumentiert,26,,,False,,
