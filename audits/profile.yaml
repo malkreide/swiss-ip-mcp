@@ -1,0 +1,32 @@
+# Audit-Profil für swiss-ip-mcp
+# Abgeleitet aus src/swiss_ip_mcp/server.py, pyproject.toml, README, CI.
+name: swiss-ip-mcp
+repo: https://github.com/malkreide/swiss-ip-mcp
+
+transport: dual                       # stdio (Claude Desktop) + Streamable HTTP/SSE (Render.com)
+auth_model: none                      # Kein Per-Client-Auth am MCP-Layer; Upstream nutzt OAuth2-Password-Grant-Credentials (kein OAuth-Proxy)
+data_class: Public Open Data          # Swissreg: öffentliches IP-Register (IGE/IPI)
+write_capable: false                  # alle Tools readOnlyHint=true
+deployment:
+  - local-stdio
+  - Render
+is_cloud_deployed: true               # Render.com-Deployment vorhanden
+
+uses_sampling: false
+uses_sequential_thinking: false
+tools_include_filesystem: false
+tools_make_external_requests: true    # httpx-Calls an idp.ipi.ch + www.swissreg.ch
+
+sdk_language: Python                  # FastMCP (Python) — siehe pyproject.toml fastmcp>=2.0.0
+
+stadt_zuerich_context: false
+schulamt_context: false
+volksschule_context: false
+enterprise_context: false
+
+data_source:
+  name: Swissreg Datadelivery API (IGE/IPI)
+  is_swiss_open_data: true
+  url: https://www.swissreg.ch/public/apidocs/
+
+prio: 0
