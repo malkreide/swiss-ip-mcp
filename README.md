@@ -95,7 +95,21 @@ AI client (Claude Desktop, Cursor, VS Code + Continue, …)
 | Transport | Use case | Configuration |
 |-----------|----------|---------------|
 | **stdio** | Claude Desktop, local development | Default (no extra setup) |
-| **SSE** | Cloud deployment (Render.com etc.) | `MCP_TRANSPORT=sse` |
+| **Streamable HTTP** | Cloud deployment (Render.com etc.) | `MCP_TRANSPORT=streamable-http` |
+| **SSE** | Legacy HTTP clients | `MCP_TRANSPORT=sse` |
+
+Transport is selected at startup from the `MCP_TRANSPORT` environment variable
+(default `stdio`). The HTTP transports are served by uvicorn and honour:
+
+| Variable | Default | Purpose |
+|----------|---------|---------|
+| `MCP_HOST` | `127.0.0.1` | Bind address. Use `0.0.0.0` **only** inside a container / behind a reverse proxy. |
+| `PORT` / `MCP_PORT` | `8000` | Bind port (`PORT` wins — PaaS convention). |
+| `MCP_ALLOWED_ORIGINS` | _(empty)_ | Comma-separated CORS origin allow-list. No wildcard in production. |
+| `MCP_ALLOWED_HOSTS` | _(empty)_ | Comma-separated `Host`-header allow-list; enables DNS-rebinding protection when set. |
+
+The `Mcp-Session-Id` header is exposed via CORS so browser-based clients can
+read and echo it on follow-up requests.
 
 ---
 
@@ -162,11 +176,23 @@ Open the config file:
 | Windsurf | Add via MCP server settings |
 | Self-hosted (mcp-proxy) | Use SSE transport with `MCP_TRANSPORT=sse` |
 
-### Cloud / Render.com (SSE Transport)
+### Cloud / Render.com (Streamable HTTP)
 
 ```bash
-MCP_TRANSPORT=sse PORT=8000 IGE_USERNAME=... IGE_PASSWORD=... swiss-ip-mcp
+MCP_TRANSPORT=streamable-http \
+  MCP_HOST=0.0.0.0 PORT=8000 \
+  MCP_ALLOWED_ORIGINS="https://your-client.example" \
+  MCP_ALLOWED_HOSTS="your-app.onrender.com" \
+  IGE_USERNAME=... IGE_PASSWORD=... \
+  swiss-ip-mcp
 ```
+
+> **Security note:** bind to `0.0.0.0` only inside a container or behind a
+> reverse proxy. Always set `MCP_ALLOWED_ORIGINS` and `MCP_ALLOWED_HOSTS` for
+> public deployments — this enables CORS scoping and DNS-rebinding protection.
+> The endpoint is unauthenticated and serves only public IP-register data; do
+> not place credentialed or non-public tools behind this transport without
+> adding authentication first.
 
 ---
 

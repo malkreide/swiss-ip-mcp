@@ -95,7 +95,22 @@ KI-Client (Claude Desktop, Cursor, VS Code + Continue, …)
 | Transport | Einsatz | Konfiguration |
 |-----------|---------|---------------|
 | **stdio** | Claude Desktop, lokale Entwicklung | Standard (kein Zusatzaufwand) |
-| **SSE** | Cloud-Deployment, Render.com | `MCP_TRANSPORT=sse` |
+| **Streamable HTTP** | Cloud-Deployment, Render.com | `MCP_TRANSPORT=streamable-http` |
+| **SSE** | Legacy-HTTP-Clients | `MCP_TRANSPORT=sse` |
+
+Der Transport wird beim Start aus der Umgebungsvariable `MCP_TRANSPORT`
+gewählt (Standard `stdio`). Die HTTP-Transporte laufen unter uvicorn und
+berücksichtigen:
+
+| Variable | Standard | Zweck |
+|----------|----------|-------|
+| `MCP_HOST` | `127.0.0.1` | Bind-Adresse. `0.0.0.0` **nur** im Container / hinter Reverse-Proxy. |
+| `PORT` / `MCP_PORT` | `8000` | Bind-Port (`PORT` gewinnt — PaaS-Konvention). |
+| `MCP_ALLOWED_ORIGINS` | _(leer)_ | Komma-separierte CORS-Origin-Allow-List. Kein Wildcard in Produktion. |
+| `MCP_ALLOWED_HOSTS` | _(leer)_ | Komma-separierte `Host`-Header-Allow-List; aktiviert DNS-Rebinding-Schutz. |
+
+Der `Mcp-Session-Id`-Header wird via CORS exponiert, damit Browser-Clients ihn
+lesen und bei Folge-Requests zurücksenden können.
 
 ---
 
@@ -151,11 +166,23 @@ Datei öffnen:
 }
 ```
 
-### Cloud / Render.com (SSE-Transport)
+### Cloud / Render.com (Streamable HTTP)
 
 ```bash
-MCP_TRANSPORT=sse PORT=8000 IGE_USERNAME=... IGE_PASSWORD=... swiss-ip-mcp
+MCP_TRANSPORT=streamable-http \
+  MCP_HOST=0.0.0.0 PORT=8000 \
+  MCP_ALLOWED_ORIGINS="https://dein-client.example" \
+  MCP_ALLOWED_HOSTS="deine-app.onrender.com" \
+  IGE_USERNAME=... IGE_PASSWORD=... \
+  swiss-ip-mcp
 ```
+
+> **Sicherheitshinweis:** `0.0.0.0` nur im Container oder hinter einem
+> Reverse-Proxy binden. Für öffentliche Deployments stets `MCP_ALLOWED_ORIGINS`
+> und `MCP_ALLOWED_HOSTS` setzen — das aktiviert CORS-Scoping und
+> DNS-Rebinding-Schutz. Der Endpunkt ist unauthentifiziert und liefert nur
+> öffentliche IP-Registerdaten; ohne vorher ergänzte Authentifizierung keine
+> credential-behafteten oder nicht-öffentlichen Tools dahinter betreiben.
 
 ---
 

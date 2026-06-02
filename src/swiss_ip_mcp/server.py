@@ -6,7 +6,8 @@ Covers: Trademarks (Marken), Patents, Patent Publications,
         SPC/ESZ (Supplementary Protection Certificates).
 
 Authentication: OAuth2 via IDP (IGE_USERNAME / IGE_PASSWORD env vars).
-Transport:      stdio (Claude Desktop) and Streamable HTTP / SSE (Render.com).
+Transport:      stdio (default, e.g. Claude Desktop) and Streamable HTTP / SSE
+                (cloud, e.g. Render.com) — selected via the MCP_TRANSPORT env var.
 """
 
 from __future__ import annotations
@@ -17,11 +18,14 @@ import os
 import time
 import xml.etree.ElementTree as ET
 import xml.sax.saxutils as saxutils
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 from enum import StrEnum
 from typing import Optional
 
 import httpx
 from mcp.server.fastmcp import FastMCP
+from mcp.server.transport_security import TransportSecuritySettings
 from pydantic import BaseModel, ConfigDict, Field
 
 # ---------------------------------------------------------------------------
@@ -52,6 +56,43 @@ REQUEST_TIMEOUT = 60.0
 # Token cache (module-level singleton)
 # ---------------------------------------------------------------------------
 _token_cache: dict = {"token": None, "expires_at": 0.0}
+
+# ---------------------------------------------------------------------------
+# Pooled HTTP client (SDK-001)
+#
+# A single AsyncClient is reused across all tool calls so that TCP/TLS
+# connections are pooled instead of re-established on every request. The
+# client is created lazily on first use and torn down by the server lifespan
+# (see `_lifespan`). Lazy creation keeps the helper usable in unit tests that
+# never enter the lifespan context.
+# ---------------------------------------------------------------------------
+_client: Optional[httpx.AsyncClient] = None
+
+
+def _get_client() -> httpx.AsyncClient:
+    """Return the shared AsyncClient, creating it once on first use."""
+    global _client
+    if _client is None or _client.is_closed:
+        _client = httpx.AsyncClient(timeout=REQUEST_TIMEOUT)
+    return _client
+
+
+@asynccontextmanager
+async def _lifespan(_server: FastMCP) -> AsyncIterator[dict]:
+    """Server lifespan: own the pooled HTTP client for the whole process.
+
+    Shared by all transports (stdio + Streamable HTTP / SSE), so there is no
+    transport-dependent setup branch (ARCH-004).
+    """
+    client = _get_client()
+    logger.info("swiss_ip_mcp lifespan up — pooled HTTP client ready")
+    try:
+        yield {"client": client}
+    finally:
+        global _client
+        await client.aclose()
+        _client = None
+        logger.info("swiss_ip_mcp lifespan down — HTTP client closed")
 
 
 async def _get_token(client: httpx.AsyncClient) -> str:
@@ -94,20 +135,20 @@ async def _get_token(client: httpx.AsyncClient) -> str:
 
 async def _call_api(xml_body: str) -> ET.Element:
     """Post an XML request to the Swissreg API and return the root element."""
-    async with httpx.AsyncClient() as client:
-        token = await _get_token(client)
-        resp = await client.post(
-            API_ENDPOINT,
-            content=xml_body.encode("utf-8"),
-            headers={
-                "Authorization": f"Bearer {token}",
-                "Content-Type": "application/xml",
-                "Accept": "application/xml",
-            },
-            timeout=REQUEST_TIMEOUT,
-        )
-        resp.raise_for_status()
-        return ET.fromstring(resp.content)
+    client = _get_client()
+    token = await _get_token(client)
+    resp = await client.post(
+        API_ENDPOINT,
+        content=xml_body.encode("utf-8"),
+        headers={
+            "Authorization": f"Bearer {token}",
+            "Content-Type": "application/xml",
+            "Accept": "application/xml",
+        },
+        timeout=REQUEST_TIMEOUT,
+    )
+    resp.raise_for_status()
+    return ET.fromstring(resp.content)
 
 
 # ---------------------------------------------------------------------------
@@ -325,6 +366,56 @@ class ResponseFormat(StrEnum):
 
 
 # ---------------------------------------------------------------------------
+# Transport / network configuration (SCALE-001, SEC-016)
+# ---------------------------------------------------------------------------
+
+def _env_host() -> str:
+    """Bind host. Defaults to loopback; 0.0.0.0 must be opted into explicitly."""
+    return os.getenv("MCP_HOST", "127.0.0.1")
+
+
+def _env_port() -> int:
+    """Bind port. `PORT` (PaaS convention, e.g. Render) wins over `MCP_PORT`."""
+    return int(os.getenv("PORT") or os.getenv("MCP_PORT") or "8000")
+
+
+def _csv_env(name: str) -> list[str]:
+    return [v.strip() for v in os.getenv(name, "").split(",") if v.strip()]
+
+
+def _resolve_transport() -> str:
+    """Normalise MCP_TRANSPORT to one of: stdio, sse, streamable-http."""
+    raw = os.getenv("MCP_TRANSPORT", "stdio").strip().lower()
+    if raw in ("", "stdio"):
+        return "stdio"
+    if raw == "sse":
+        return "sse"
+    if raw in ("http", "streamable-http", "streamable_http"):
+        return "streamable-http"
+    raise SystemExit(
+        f"Ungültiger MCP_TRANSPORT={raw!r}. Erlaubt: stdio, sse, streamable-http."
+    )
+
+
+def _transport_security() -> Optional[TransportSecuritySettings]:
+    """DNS-rebinding protection for HTTP transports (SEC-005).
+
+    Active only when an allow-list is configured via env, so local stdio use
+    stays zero-config. In cloud deployments set MCP_ALLOWED_HOSTS /
+    MCP_ALLOWED_ORIGINS to your public host(s).
+    """
+    hosts = _csv_env("MCP_ALLOWED_HOSTS")
+    origins = _csv_env("MCP_ALLOWED_ORIGINS")
+    if not hosts and not origins:
+        return None
+    return TransportSecuritySettings(
+        enable_dns_rebinding_protection=True,
+        allowed_hosts=hosts,
+        allowed_origins=origins,
+    )
+
+
+# ---------------------------------------------------------------------------
 # MCP Server
 # ---------------------------------------------------------------------------
 mcp = FastMCP(
@@ -336,6 +427,10 @@ mcp = FastMCP(
         "protection certificates (SPC/ESZ). Requires IGE_USERNAME and "
         "IGE_PASSWORD environment variables (free after signing IGE usage terms)."
     ),
+    lifespan=_lifespan,
+    host=_env_host(),
+    port=_env_port(),
+    transport_security=_transport_security(),
 )
 
 # ---------------------------------------------------------------------------
@@ -1001,8 +1096,59 @@ async def swiss_ip_get_quota() -> str:
 # Entrypoint
 # ---------------------------------------------------------------------------
 
+def _in_container() -> bool:
+    """Best-effort detection of a container/orchestrator environment."""
+    return (
+        os.path.exists("/.dockerenv")
+        or os.getenv("CONTAINER") == "1"
+        or os.getenv("KUBERNETES_SERVICE_HOST") is not None
+    )
+
+
+def _run_http(transport: str) -> None:
+    """Serve over Streamable HTTP or SSE with CORS configured (SDK-004).
+
+    Builds the ASGI app from the FastMCP instance and runs it under uvicorn on
+    the configured host/port, so binding is explicit and controllable (SEC-016).
+    """
+    import uvicorn
+    from starlette.middleware.cors import CORSMiddleware
+
+    host, port = _env_host(), _env_port()
+    if host == "0.0.0.0" and not _in_container():  # noqa: S104 — intentional, gated
+        logger.warning(
+            "Binding auf 0.0.0.0 ohne erkannte Container-Umgebung. Im lokalen "
+            "Betrieb 127.0.0.1 verwenden; 0.0.0.0 nur hinter einem Reverse-Proxy "
+            "/ in einem Container (SEC-016)."
+        )
+
+    app = mcp.sse_app() if transport == "sse" else mcp.streamable_http_app()
+
+    # CORS: explicit origin allow-list (no wildcard in production), and the
+    # Mcp-Session-Id header must be both accepted and exposed so browser
+    # clients can read it from the response and echo it on follow-up requests.
+    origins = _csv_env("MCP_ALLOWED_ORIGINS")
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=origins,
+        allow_credentials=bool(origins),
+        allow_methods=["GET", "POST", "DELETE", "OPTIONS"],
+        allow_headers=["Content-Type", "Authorization", "Mcp-Session-Id", "Last-Event-ID"],
+        expose_headers=["Mcp-Session-Id"],
+    )
+
+    logger.info("swiss_ip_mcp starting via %s on %s:%d", transport, host, port)
+    uvicorn.run(app, host=host, port=port, log_level="info")
+
+
 def main() -> None:
-    mcp.run()
+    """Run the server. Transport is stdio by default; set MCP_TRANSPORT=sse or
+    MCP_TRANSPORT=streamable-http for cloud deployments."""
+    transport = _resolve_transport()
+    if transport == "stdio":
+        mcp.run()
+    else:
+        _run_http(transport)
 
 
 if __name__ == "__main__":
