@@ -370,6 +370,144 @@ class TestInputValidation:
 # Integration / smoke tests (live, skipped without credentials)
 # ---------------------------------------------------------------------------
 
+# ---------------------------------------------------------------------------
+# Unit tests – pooled HTTP client & lifespan (SDK-001)
+# ---------------------------------------------------------------------------
+
+class TestPooledClient:
+    def test_get_client_is_pooled(self):
+        import swiss_ip_mcp.server as srv
+
+        srv._client = None
+        c1 = srv._get_client()
+        c2 = srv._get_client()
+        assert c1 is c2  # reused, not recreated per call
+
+    def test_get_client_recreates_after_teardown(self):
+        import swiss_ip_mcp.server as srv
+
+        srv._client = None
+        c1 = srv._get_client()
+        srv._client = None  # simulate lifespan teardown
+        c2 = srv._get_client()
+        assert c1 is not c2
+
+    @pytest.mark.asyncio
+    async def test_lifespan_opens_and_closes_client(self):
+        import swiss_ip_mcp.server as srv
+
+        srv._client = None
+        async with srv._lifespan(srv.mcp) as ctx:
+            assert "client" in ctx
+            assert ctx["client"] is srv._get_client()
+            assert not ctx["client"].is_closed
+        # after exit the module-level client is reset
+        assert srv._client is None
+
+
+# ---------------------------------------------------------------------------
+# Unit tests – transport / network configuration (SCALE-001, SEC-016)
+# ---------------------------------------------------------------------------
+
+class TestTransportConfig:
+    def test_default_transport_is_stdio(self, monkeypatch):
+        import swiss_ip_mcp.server as srv
+
+        monkeypatch.delenv("MCP_TRANSPORT", raising=False)
+        assert srv._resolve_transport() == "stdio"
+
+    def test_sse_and_http_aliases(self, monkeypatch):
+        import swiss_ip_mcp.server as srv
+
+        monkeypatch.setenv("MCP_TRANSPORT", "sse")
+        assert srv._resolve_transport() == "sse"
+        for alias in ("http", "streamable-http", "streamable_http"):
+            monkeypatch.setenv("MCP_TRANSPORT", alias)
+            assert srv._resolve_transport() == "streamable-http"
+
+    def test_unknown_transport_exits(self, monkeypatch):
+        import swiss_ip_mcp.server as srv
+
+        monkeypatch.setenv("MCP_TRANSPORT", "carrier-pigeon")
+        with pytest.raises(SystemExit):
+            srv._resolve_transport()
+
+    def test_host_default_is_loopback(self, monkeypatch):
+        import swiss_ip_mcp.server as srv
+
+        monkeypatch.delenv("MCP_HOST", raising=False)
+        assert srv._env_host() == "127.0.0.1"
+
+    def test_port_prefers_paas_port(self, monkeypatch):
+        import swiss_ip_mcp.server as srv
+
+        monkeypatch.setenv("PORT", "9001")
+        monkeypatch.setenv("MCP_PORT", "8002")
+        assert srv._env_port() == 9001
+        monkeypatch.delenv("PORT", raising=False)
+        assert srv._env_port() == 8002
+
+    def test_transport_security_off_without_allowlist(self, monkeypatch):
+        import swiss_ip_mcp.server as srv
+
+        monkeypatch.delenv("MCP_ALLOWED_HOSTS", raising=False)
+        monkeypatch.delenv("MCP_ALLOWED_ORIGINS", raising=False)
+        assert srv._transport_security() is None
+
+    def test_transport_security_on_with_allowlist(self, monkeypatch):
+        import swiss_ip_mcp.server as srv
+
+        monkeypatch.setenv("MCP_ALLOWED_HOSTS", "swiss-ip.example.ch")
+        sec = srv._transport_security()
+        assert sec is not None
+        assert sec.enable_dns_rebinding_protection is True
+        assert "swiss-ip.example.ch" in sec.allowed_hosts
+
+
+# ---------------------------------------------------------------------------
+# Unit tests – HTTP serving wires CORS + binding warning (SDK-004, SEC-016)
+# ---------------------------------------------------------------------------
+
+class TestHttpServing:
+    def test_run_http_configures_cors_and_binds_configured_host(self, monkeypatch):
+        import swiss_ip_mcp.server as srv
+
+        monkeypatch.setenv("MCP_HOST", "127.0.0.1")
+        monkeypatch.setenv("PORT", "8123")
+        monkeypatch.setenv("MCP_ALLOWED_ORIGINS", "https://client.example")
+
+        captured = {}
+
+        def fake_uvicorn_run(app, host, port, log_level):
+            captured["host"] = host
+            captured["port"] = port
+            captured["middlewares"] = [m.cls.__name__ for m in app.user_middleware]
+
+        fake_uvicorn = MagicMock()
+        fake_uvicorn.run = fake_uvicorn_run
+        monkeypatch.setitem(__import__("sys").modules, "uvicorn", fake_uvicorn)
+
+        srv._run_http("streamable-http")
+
+        assert captured["host"] == "127.0.0.1"
+        assert captured["port"] == 8123
+        assert "CORSMiddleware" in captured["middlewares"]
+
+    def test_run_http_warns_on_public_bind_outside_container(self, monkeypatch, caplog):
+        import logging
+
+        import swiss_ip_mcp.server as srv
+
+        monkeypatch.setenv("MCP_HOST", "0.0.0.0")
+        monkeypatch.setattr(srv, "_in_container", lambda: False)
+        monkeypatch.setitem(__import__("sys").modules, "uvicorn", MagicMock())
+
+        with caplog.at_level(logging.WARNING):
+            srv._run_http("streamable-http")
+
+        assert any("0.0.0.0" in r.message for r in caplog.records)
+
+
 @pytest.mark.skipif(not LIVE, reason="IGE_USERNAME not set – skipping live tests")
 class TestLiveApi:
     @pytest.mark.asyncio
