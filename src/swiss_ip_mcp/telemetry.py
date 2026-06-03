@@ -82,6 +82,12 @@ def traced_tool(func: _F) -> _F:
             logger.info("tool.call.start")
             try:
                 return await func(*args, **kwargs)
+            except Exception as exc:
+                # Tool raised → the client will receive isError=true (OBS-001).
+                span.set_attribute("mcp.tool.result.is_error", True)
+                span.record_exception(exc)
+                logger.warning("tool.call.error", error_type=type(exc).__name__)
+                raise
             finally:
                 logger.debug("tool.call.end")
                 structlog.contextvars.unbind_contextvars("tool", "correlation_id")

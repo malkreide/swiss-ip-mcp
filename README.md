@@ -67,6 +67,33 @@ The real power is natural language. Instead of manually searching the register, 
 | `swiss_ip_search_recent_filings` | Filter filings by date range across all domains |
 | `swiss_ip_get_quota` | Check remaining API data transfer quota |
 
+### Resources & Prompts
+
+Beyond tools, the server exposes two more MCP primitives:
+
+**Resources** (read-only metadata, `swissip://` URI scheme):
+
+| URI | Content |
+|-----|---------|
+| `swissip://about` | Server + data-source metadata (provenance, covered domains) |
+| `swissip://domains` | List of covered IP domains |
+
+**Prompts** (curated workflow templates):
+
+| Prompt | Arguments | Purpose |
+|--------|-----------|---------|
+| `trademark_availability` | `name` | Check whether a name is a registered Swiss trademark |
+| `competitor_ip_report` | `company` | IP overview (trademarks + patents) for a company |
+| `recent_ip_filings_report` | `ip_type, date_from, date_to` | Report on recent filings in a period |
+
+### Error semantics
+
+Tool **execution errors** (API failures, timeouts, missing credentials) are
+returned with MCP `isError: true` and a masked, user-friendly message — internal
+details (stack traces, raw API bodies) go only to the server log. A specific
+number lookup that finds nothing is **not** an error: it returns a normal result
+with `match_type: "none"` and a `message`.
+
 ---
 
 ## Architecture

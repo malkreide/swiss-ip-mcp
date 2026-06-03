@@ -24,6 +24,7 @@ from typing import Optional
 
 import httpx
 from mcp.server.fastmcp import FastMCP
+from mcp.server.fastmcp.exceptions import ToolError
 from mcp.server.transport_security import TransportSecuritySettings
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -789,7 +790,7 @@ async def swiss_ip_search_trademarks(params: TrademarkSearchInput) -> str:
         result = _parse_result_page(root)
         return _render(result, params.response_format)
     except Exception as e:
-        return _render({"error": _handle_error(e)}, params.response_format)
+        raise ToolError(_handle_error(e)) from e
 
 
 @mcp.tool(
@@ -831,7 +832,7 @@ async def swiss_ip_search_trademarks_by_owner(
         result = _parse_result_page(root)
         return _render(result, params.response_format)
     except Exception as e:
-        return _render({"error": _handle_error(e)}, params.response_format)
+        raise ToolError(_handle_error(e)) from e
 
 
 @mcp.tool(
@@ -865,14 +866,19 @@ async def swiss_ip_get_trademark(params: TrademarkNumberInput) -> str:
         root = await _call_api(xml_body)
         result = _parse_result_page(root)
         if result["count"] == 0:
+            # A specific number not existing is a valid empty result, not an
+            # execution error — keep isError=false (OBS-001).
             return _render({
+                "source": DATA_SOURCE,
                 "match_type": "none",
-                "error": f"Marke '{params.trademark_number}' nicht gefunden. "
-                         "Bitte Nummernformat prüfen (z.B. 'P-756123')."
+                "count": 0,
+                "results": [],
+                "message": f"Marke '{params.trademark_number}' nicht gefunden. "
+                           "Bitte Nummernformat prüfen (z.B. 'P-756123').",
             }, params.response_format)
         return _render(result, params.response_format)
     except Exception as e:
-        return _render({"error": _handle_error(e)}, params.response_format)
+        raise ToolError(_handle_error(e)) from e
 
 
 @mcp.tool(
@@ -923,7 +929,7 @@ async def swiss_ip_search_trademarks_by_class(
         result["nice_class_searched"] = params.nice_class
         return _render(result, params.response_format)
     except Exception as e:
-        return _render({"error": _handle_error(e)}, params.response_format)
+        raise ToolError(_handle_error(e)) from e
 
 
 # ---------------------------------------------------------------------------
@@ -967,7 +973,7 @@ async def swiss_ip_search_patents(params: PatentSearchInput) -> str:
         result = _parse_result_page(root)
         return _render(result, params.response_format)
     except Exception as e:
-        return _render({"error": _handle_error(e)}, params.response_format)
+        raise ToolError(_handle_error(e)) from e
 
 
 @mcp.tool(
@@ -1001,16 +1007,20 @@ async def swiss_ip_get_patent(params: PatentNumberInput) -> str:
         root = await _call_api(xml_body)
         result = _parse_result_page(root)
         if result["count"] == 0:
+            # Valid empty result, not an execution error (OBS-001).
             return _render({
+                "source": DATA_SOURCE,
                 "match_type": "none",
-                "error": (
+                "count": 0,
+                "results": [],
+                "message": (
                     f"Patent '{params.patent_number}' nicht gefunden. "
                     "Bitte Format prüfen (z.B. 'CH700123' oder '700123')."
-                )
+                ),
             }, params.response_format)
         return _render(result, params.response_format)
     except Exception as e:
-        return _render({"error": _handle_error(e)}, params.response_format)
+        raise ToolError(_handle_error(e)) from e
 
 
 @mcp.tool(
@@ -1050,7 +1060,7 @@ async def swiss_ip_search_patents_by_applicant(
         result = _parse_result_page(root)
         return _render(result, params.response_format)
     except Exception as e:
-        return _render({"error": _handle_error(e)}, params.response_format)
+        raise ToolError(_handle_error(e)) from e
 
 
 @mcp.tool(
@@ -1090,7 +1100,7 @@ async def swiss_ip_search_patent_publications(
         result = _parse_result_page(root)
         return _render(result, params.response_format)
     except Exception as e:
-        return _render({"error": _handle_error(e)}, params.response_format)
+        raise ToolError(_handle_error(e)) from e
 
 
 # ---------------------------------------------------------------------------
@@ -1130,7 +1140,7 @@ async def swiss_ip_search_spc(params: SpcSearchInput) -> str:
         result = _parse_result_page(root)
         return _render(result, params.response_format)
     except Exception as e:
-        return _render({"error": _handle_error(e)}, params.response_format)
+        raise ToolError(_handle_error(e)) from e
 
 
 # ---------------------------------------------------------------------------
@@ -1198,7 +1208,7 @@ async def swiss_ip_search_recent_filings(params: DateRangeInput) -> str:
         }
         return _render(result, params.response_format)
     except Exception as e:
-        return _render({"error": _handle_error(e)}, params.response_format)
+        raise ToolError(_handle_error(e)) from e
 
 
 @mcp.tool(
@@ -1225,9 +1235,78 @@ async def swiss_ip_get_quota() -> str:
         quota_dict = _el_to_dict(root)
         payload = {"source": DATA_SOURCE, "quota": quota_dict}
         return json.dumps(payload, ensure_ascii=False, indent=2)
-    except Exception as e:  # quota has no response_format — always JSON
-        mark_error(True)
-        return json.dumps({"error": _handle_error(e)}, ensure_ascii=False)
+    except Exception as e:
+        raise ToolError(_handle_error(e)) from e
+
+
+# ---------------------------------------------------------------------------
+# Resources (ARCH-008) — read-only metadata under the swissip:// URI scheme
+# ---------------------------------------------------------------------------
+
+COVERED_DOMAINS = {
+    "trademarks": "Schweizer Markenregister (Marken)",
+    "patents": "Schweizer Patente",
+    "patent_publications": "Offizielle Patentpublikationen",
+    "spc": "Ergänzende Schutzzertifikate (ESZ / SPC)",
+}
+
+
+@mcp.resource("swissip://about", mime_type="application/json")
+def about_resource() -> str:
+    """Server- und Datenquellen-Metadaten (Provenance + abgedeckte Domänen)."""
+    return json.dumps(
+        {
+            "server": "swiss-ip-mcp",
+            "description": "MCP-Zugriff auf Schweizer IP-Daten via IGE/IPI Swissreg.",
+            "source": DATA_SOURCE,
+            "covered_domains": COVERED_DOMAINS,
+            "read_only": True,
+        },
+        ensure_ascii=False,
+        indent=2,
+    )
+
+
+@mcp.resource("swissip://domains", mime_type="application/json")
+def domains_resource() -> str:
+    """Liste der abgedeckten IP-Domänen dieses Servers."""
+    return json.dumps({"covered_domains": COVERED_DOMAINS}, ensure_ascii=False, indent=2)
+
+
+# ---------------------------------------------------------------------------
+# Prompts (ARCH-008) — curated workflow templates
+# ---------------------------------------------------------------------------
+
+@mcp.prompt(title="Markenverfügbarkeit prüfen")
+def trademark_availability(name: str) -> str:
+    """Prüft, ob ein Name als Schweizer Marke registriert ist."""
+    return (
+        f"Prüfe, ob '{name}' als Schweizer Marke registriert ist. Nutze "
+        "swiss_ip_search_trademarks für eine Freitextsuche und bei Bedarf "
+        "swiss_ip_search_trademarks_by_owner. Fasse Status, Inhaber und "
+        "Nizza-Klassen der Treffer zusammen und bewerte die Verfügbarkeit."
+    )
+
+
+@mcp.prompt(title="Wettbewerber-IP-Report")
+def competitor_ip_report(company: str) -> str:
+    """Erstellt einen IP-Überblick (Marken + Patente) zu einem Unternehmen."""
+    return (
+        f"Erstelle einen IP-Überblick für '{company}'. Nutze "
+        "swiss_ip_search_trademarks_by_owner und "
+        "swiss_ip_search_patents_by_applicant (mit Wildcard '*'). Fasse die "
+        "wichtigsten Marken und Patente sowie erkennbare Trends zusammen."
+    )
+
+
+@mcp.prompt(title="Neueste IP-Eintragungen")
+def recent_ip_filings_report(ip_type: str, date_from: str, date_to: str) -> str:
+    """Report über neue IP-Eintragungen in einem Zeitraum."""
+    return (
+        f"Liste die neuen {ip_type}-Eintragungen zwischen {date_from} und "
+        f"{date_to} (date_to exklusiv) via swiss_ip_search_recent_filings und "
+        "fasse Anzahl, auffällige Anmelder und Themen zusammen."
+    )
 
 
 # ---------------------------------------------------------------------------

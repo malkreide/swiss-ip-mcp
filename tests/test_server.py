@@ -248,18 +248,19 @@ class TestTrademarkTools:
             assert result["total"] == "42"
 
     @pytest.mark.asyncio
-    async def test_search_trademarks_api_error(self):
+    async def test_search_trademarks_api_error_raises(self):
+        # OBS-001: execution errors raise → FastMCP returns isError=true.
         import httpx
+        from mcp.server.fastmcp.exceptions import ToolError
         err = httpx.HTTPStatusError(
             "401", request=MagicMock(), response=MagicMock(status_code=401)
         )
         with patch("swiss_ip_mcp.server._call_api", new=AsyncMock(side_effect=err)):
             from swiss_ip_mcp.server import TrademarkSearchInput
             params = TrademarkSearchInput(query="test")
-            result_str = await swiss_ip_search_trademarks(params)
-            result = json.loads(result_str)
-            assert "error" in result
-            assert "401" in result["error"] or "Authentication" in result["error"]
+            with pytest.raises(ToolError) as ei:
+                await swiss_ip_search_trademarks(params)
+            assert "401" in str(ei.value)
 
     @pytest.mark.asyncio
     async def test_get_trademark_not_found(self):
@@ -269,8 +270,10 @@ class TestTrademarkTools:
             params = TrademarkNumberInput(trademark_number="P-000000")
             result_str = await swiss_ip_get_trademark(params)
             result = json.loads(result_str)
-            assert "error" in result
-            assert "nicht gefunden" in result["error"].lower()
+            # not-found is a valid empty result (isError=false), not an error
+            assert result["match_type"] == "none"
+            assert result["count"] == 0
+            assert "nicht gefunden" in result["message"].lower()
 
     @pytest.mark.asyncio
     async def test_search_by_owner(self):
@@ -312,7 +315,9 @@ class TestPatentTools:
             params = PatentNumberInput(patent_number="CH000000")
             result_str = await swiss_ip_get_patent(params)
             result = json.loads(result_str)
-            assert "error" in result
+            assert result["match_type"] == "none"
+            assert result["count"] == 0
+            assert "nicht gefunden" in result["message"].lower()
 
     @pytest.mark.asyncio
     async def test_search_by_applicant(self):
@@ -466,17 +471,126 @@ class TestStructuredLogging:
     async def test_unexpected_error_logged_at_error_level(self):
         import structlog
 
+        from mcp.server.fastmcp.exceptions import ToolError
         with structlog.testing.capture_logs() as logs:
             with patch(
                 "swiss_ip_mcp.server._call_api",
                 new=AsyncMock(side_effect=RuntimeError("boom")),
             ):
                 from swiss_ip_mcp.server import TrademarkSearchInput
-                await swiss_ip_search_trademarks(TrademarkSearchInput(query="x"))
+                with pytest.raises(ToolError):
+                    await swiss_ip_search_trademarks(TrademarkSearchInput(query="x"))
         errors = [e for e in logs if e["event"] == "unexpected_error"]
         assert errors and errors[0]["log_level"] == "error"
         # no raw exception value leaks into the structured event
         assert "boom" not in str(errors[0])
+
+
+# ---------------------------------------------------------------------------
+# Unit tests – MCP error semantics & primitives (OBS-001, ARCH-008)
+# ---------------------------------------------------------------------------
+
+class TestMcpErrorSemantics:
+    @pytest.mark.asyncio
+    async def test_served_execution_error_sets_is_error(self):
+        # OBS-001 end-to-end: through the lowlevel handler a failing tool yields
+        # a CallToolResult with isError=true (execution error, not protocol error).
+        import httpx
+        from mcp.types import CallToolRequest, CallToolRequestParams
+
+        from swiss_ip_mcp.server import mcp
+
+        err = httpx.HTTPStatusError(
+            "500", request=MagicMock(), response=MagicMock(status_code=500)
+        )
+        handler = mcp._mcp_server.request_handlers[CallToolRequest]
+        req = CallToolRequest(
+            method="tools/call",
+            params=CallToolRequestParams(
+                name="swiss_ip_search_trademarks", arguments={"params": {"query": "x"}}
+            ),
+        )
+        with patch("swiss_ip_mcp.server._call_api", new=AsyncMock(side_effect=err)):
+            result = (await handler(req)).root
+        assert result.isError is True
+        # masked, no stack trace / upstream body in the surfaced text
+        text = result.content[0].text
+        assert "Server-Log" in text
+        assert "Traceback" not in text
+
+    @pytest.mark.asyncio
+    async def test_served_success_is_not_error(self):
+        from mcp.types import CallToolRequest, CallToolRequestParams
+
+        from swiss_ip_mcp.server import mcp
+
+        root = _make_root(SAMPLE_TM_XML)
+        handler = mcp._mcp_server.request_handlers[CallToolRequest]
+        req = CallToolRequest(
+            method="tools/call",
+            params=CallToolRequestParams(
+                name="swiss_ip_search_trademarks", arguments={"params": {"query": "x"}}
+            ),
+        )
+        with patch("swiss_ip_mcp.server._call_api", new=AsyncMock(return_value=root)):
+            result = (await handler(req)).root
+        assert result.isError is False
+
+    @pytest.mark.asyncio
+    async def test_protocol_error_on_invalid_args(self):
+        # Protocol-error path: invalid arguments do not reach the handler body.
+        from mcp.types import CallToolRequest, CallToolRequestParams
+
+        from swiss_ip_mcp.server import mcp
+
+        handler = mcp._mcp_server.request_handlers[CallToolRequest]
+        req = CallToolRequest(
+            method="tools/call",
+            params=CallToolRequestParams(
+                name="swiss_ip_search_trademarks", arguments={}  # missing 'query'
+            ),
+        )
+        result = (await handler(req)).root
+        assert result.isError is True
+
+
+class TestMcpPrimitives:
+    @pytest.mark.asyncio
+    async def test_resources_registered(self):
+        from swiss_ip_mcp.server import mcp
+
+        uris = {str(r.uri) for r in await mcp.list_resources()}
+        assert {"swissip://about", "swissip://domains"} <= uris
+
+    @pytest.mark.asyncio
+    async def test_about_resource_carries_provenance(self):
+        import json as _json
+
+        from swiss_ip_mcp.server import mcp
+
+        content = await mcp.read_resource("swissip://about")
+        payload = _json.loads(list(content)[0].content)
+        assert payload["source"]["name"].startswith("Swissreg")
+        assert "trademarks" in payload["covered_domains"]
+
+    @pytest.mark.asyncio
+    async def test_prompts_registered(self):
+        from swiss_ip_mcp.server import mcp
+
+        names = {p.name for p in await mcp.list_prompts()}
+        assert {
+            "trademark_availability",
+            "competitor_ip_report",
+            "recent_ip_filings_report",
+        } <= names
+
+    @pytest.mark.asyncio
+    async def test_prompt_renders_with_argument(self):
+        from swiss_ip_mcp.server import mcp
+
+        result = await mcp.get_prompt("trademark_availability", {"name": "ACME"})
+        text = result.messages[0].content.text
+        assert "ACME" in text
 
 
 # ---------------------------------------------------------------------------
@@ -556,9 +670,11 @@ class TestTelemetry:
             err = httpx.HTTPStatusError(
                 "500", request=MagicMock(), response=MagicMock(status_code=500)
             )
+            from mcp.server.fastmcp.exceptions import ToolError
             with patch("swiss_ip_mcp.server._call_api", new=AsyncMock(side_effect=err)):
                 from swiss_ip_mcp.server import TrademarkSearchInput
-                await swiss_ip_search_trademarks(TrademarkSearchInput(query="x"))
+                with pytest.raises(ToolError):
+                    await swiss_ip_search_trademarks(TrademarkSearchInput(query="x"))
         finally:
             telemetry.tracer = original
 
