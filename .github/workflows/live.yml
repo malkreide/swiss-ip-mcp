@@ -1,0 +1,35 @@
+name: Live Tests
+
+# Live integration tests against the real IGE Swissreg API (OPS-001).
+# Runs on a weekly schedule and on manual dispatch — never on PRs, so the
+# regular CI stays fast and credential-free. Requires repository secrets
+# IGE_USERNAME / IGE_PASSWORD; skips cleanly if they are absent.
+on:
+  schedule:
+    - cron: "0 3 * * 1"   # Mondays 03:00 UTC
+  workflow_dispatch:
+
+jobs:
+  live:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install -e ".[dev]"
+
+      - name: Run live tests
+        env:
+          IGE_USERNAME: ${{ secrets.IGE_USERNAME }}
+          IGE_PASSWORD: ${{ secrets.IGE_PASSWORD }}
+        run: |
+          if [ -z "$IGE_USERNAME" ]; then
+            echo "No IGE credentials configured — skipping live tests."
+            exit 0
+          fi
+          pytest -m live -v

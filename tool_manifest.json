@@ -1,0 +1,13 @@
+{
+  "swiss_ip_get_patent": "4384d084d31aad1fa58132357fce49cc90899b68c480d53dd0b0352a5a8964d8",
+  "swiss_ip_get_quota": "4e96aeeb836ea39d6f2fa3244d322ff32397f9719aac641f24afe71e93428d97",
+  "swiss_ip_get_trademark": "333f1cecf2e949853a7044486a44518ed9f43faa0f0359c16f7555609eb65a12",
+  "swiss_ip_search_patent_publications": "9980be4a29ac0c5a9339906883d89512ae65841d38ef19c9e637b183af284c02",
+  "swiss_ip_search_patents": "9bc5bc03af3e2f936ee8a29575a23f7a6f52e60f182a8431d17cc1f65e776c32",
+  "swiss_ip_search_patents_by_applicant": "b34ffaa0c0d4ab3b00225e493b6d884f4d8ff1ec5f8ff78b6f0123f27fd8e93c",
+  "swiss_ip_search_recent_filings": "8fcc359625efde20c94d29e20c429afbf65d62e8a1537765f3347ad46a7494e7",
+  "swiss_ip_search_spc": "5ecf24600441eace1ec0ea080c949fe3cf4a0e898b64e755434e41d7438f9e93",
+  "swiss_ip_search_trademarks": "f2728c6696ab819b6ab181e0dfecdb98b260fba48afb5ef7dc5b2d49b9161c1d",
+  "swiss_ip_search_trademarks_by_class": "f695fe764ad4b4da640750200c76fab5b65021467c056a50687d4436702bb890",
+  "swiss_ip_search_trademarks_by_owner": "db4cb04c12ed2efe977b6d8d6bae9b666323bd74a8fed90b826082db30cb4b18"
+}

@@ -149,6 +149,22 @@ The Swissreg API is subject to the [IGE usage terms](https://www.ige.ch/en/servi
 
 ---
 
+## Tool definitions (`tool_manifest.json`)
+
+Every tool's name, description, input schema and annotations are pinned by a
+SHA-256 fingerprint in `tool_manifest.json` (SEC-022). If you intentionally
+change a tool's surface, the `TestToolManifest` test will fail until you
+regenerate the manifest:
+
+```bash
+python scripts/update_tool_manifest.py
+```
+
+Commit the updated manifest, note the change in `CHANGELOG.md`, and bump the
+**major** version if the change is breaking for existing clients.
+
+---
+
 ## Portfolio Context
 
 This server is part of a coherent portfolio of Swiss open-data MCP servers. When contributing, please consider:

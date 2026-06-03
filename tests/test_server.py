@@ -948,6 +948,121 @@ class TestDeployment:
         assert "stick-table" in text
 
 
+# ---------------------------------------------------------------------------
+# Unit tests – egress allow-list & tool manifest (SEC-021, SEC-022)
+# ---------------------------------------------------------------------------
+
+class TestEgressAllowList:
+    def test_allows_fixed_ige_hosts(self):
+        import swiss_ip_mcp.server as srv
+
+        srv._assert_host_allowed(srv.IDP_TOKEN_URL)   # no raise
+        srv._assert_host_allowed(srv.API_ENDPOINT)    # no raise
+
+    def test_blocks_other_hosts(self):
+        import swiss_ip_mcp.server as srv
+
+        for bad in (
+            "http://169.254.169.254/latest/meta-data/",
+            "https://evil.example/x",
+            "https://idp.ipi.ch.evil.example/x",
+        ):
+            with pytest.raises(ValueError, match="nicht erlaubt"):
+                srv._assert_host_allowed(bad)
+
+
+class TestToolManifest:
+    @pytest.mark.asyncio
+    async def test_pinned_manifest_matches(self):
+        # SEC-022: changing a tool definition must be intentional — regenerate
+        # tool_manifest.json via scripts/update_tool_manifest.py and review.
+        import json as _json
+
+        from swiss_ip_mcp.integrity import compute_manifest
+        from swiss_ip_mcp.server import mcp
+
+        current = await compute_manifest(mcp)
+        pinned = _json.loads(
+            (_REPO_ROOT / "tool_manifest.json").read_text(encoding="utf-8")
+        )
+        assert current == pinned
+
+    @pytest.mark.asyncio
+    async def test_all_tools_namespaced(self):
+        from swiss_ip_mcp.integrity import TOOL_NAMESPACE_PREFIX
+        from swiss_ip_mcp.server import mcp
+
+        for t in await mcp.list_tools():
+            assert t.name.startswith(TOOL_NAMESPACE_PREFIX)
+
+
+# ---------------------------------------------------------------------------
+# Unit tests – real HTTP path via respx (OPS-001)
+# ---------------------------------------------------------------------------
+
+class TestRespxHttpPath:
+    @pytest.mark.asyncio
+    async def test_search_through_real_http_layer(self, monkeypatch):
+        import httpx
+        import respx
+
+        import swiss_ip_mcp.server as srv
+
+        # Exercise the real _get_token + _call_api + egress guard + parser,
+        # mocking only the HTTP transport (not _call_api).
+        monkeypatch.setenv("IGE_USERNAME", "u")
+        monkeypatch.setenv("IGE_PASSWORD", "p")
+        srv._token_cache["token"] = None
+        srv._token_cache["expires_at"] = 0.0
+        srv._client = None
+
+        with respx.mock(assert_all_called=True) as mock:
+            mock.post(srv.IDP_TOKEN_URL).mock(
+                return_value=httpx.Response(
+                    200, json={"access_token": "tok", "expires_in": 300}
+                )
+            )
+            mock.post(srv.API_ENDPOINT).mock(
+                return_value=httpx.Response(200, content=SAMPLE_TM_XML.encode("utf-8"))
+            )
+            from swiss_ip_mcp.server import TrademarkSearchInput
+            result = json.loads(
+                await srv.swiss_ip_search_trademarks(TrademarkSearchInput(query="x"))
+            )
+
+        assert result["count"] == 2
+        assert result["source"]["name"].startswith("Swissreg")
+        srv._token_cache["token"] = None  # avoid leaking the fake token
+
+    @pytest.mark.asyncio
+    async def test_http_401_surfaces_as_tool_error(self, monkeypatch):
+        import httpx
+        import respx
+        from mcp.server.fastmcp.exceptions import ToolError
+
+        import swiss_ip_mcp.server as srv
+
+        monkeypatch.setenv("IGE_USERNAME", "u")
+        monkeypatch.setenv("IGE_PASSWORD", "p")
+        srv._token_cache["token"] = None
+        srv._token_cache["expires_at"] = 0.0
+        srv._client = None
+
+        with respx.mock as mock:
+            mock.post(srv.IDP_TOKEN_URL).mock(
+                return_value=httpx.Response(
+                    200, json={"access_token": "tok", "expires_in": 300}
+                )
+            )
+            mock.post(srv.API_ENDPOINT).mock(return_value=httpx.Response(401))
+            from swiss_ip_mcp.server import TrademarkSearchInput
+            with pytest.raises(ToolError) as ei:
+                await srv.swiss_ip_search_trademarks(TrademarkSearchInput(query="x"))
+        assert "401" in str(ei.value)
+        srv._token_cache["token"] = None
+
+
+@pytest.mark.live
 @pytest.mark.skipif(not LIVE, reason="IGE_USERNAME not set – skipping live tests")
 class TestLiveApi:
     @pytest.mark.asyncio
