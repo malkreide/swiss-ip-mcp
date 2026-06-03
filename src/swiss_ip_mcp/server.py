@@ -54,6 +54,19 @@ NS_SPC = "urn:ige:schema:xsd:datadeliveryspc-1.0.0"
 DEFAULT_PAGE_SIZE = 10
 REQUEST_TIMEOUT = 60.0
 
+# Provenance attached to every tool response (CH-004 / SDK-002). All data is
+# served by the IGE/IPI Swissreg Datadelivery API under its terms of use.
+DATA_SOURCE = {
+    "name": "Swissreg Datadelivery API (IGE/IPI)",
+    "provider": "Swiss Federal Institute of Intellectual Property (IGE/IPI)",
+    "url": "https://www.swissreg.ch/public/apidocs/",
+    "license": "IGE/IPI Swissreg Datadelivery API Terms of Use",
+    "license_url": (
+        "https://www.ige.ch/en/services/digital-resources/ip-data/"
+        "data-delivery-api"
+    ),
+}
+
 # ---------------------------------------------------------------------------
 # Token cache (module-level singleton)
 # ---------------------------------------------------------------------------
@@ -324,9 +337,10 @@ def _parse_result_page(root: ET.Element) -> dict:
         break
 
     return {
+        "source": DATA_SOURCE,
         "total": total,
         "count": len(items),
-        "items": items,
+        "results": items,
         "next_page_token": next_token,
     }
 
@@ -408,16 +422,16 @@ def _to_markdown(payload: dict) -> str:
     lines.append(header)
 
     # Top-level scalar metadata (e.g. nice_class_searched, date_range).
-    skip = {"items", "total", "count", "next_page_token"}
+    skip = {"source", "results", "total", "count", "next_page_token"}
     for key, value in payload.items():
         if key in skip:
             continue
         lines.append(f"- **{key}:** {_scalarize(value)}")
 
-    items = payload.get("items") or []
-    if not items:
+    results = payload.get("results") or []
+    if not results:
         lines.extend(["", "_Keine Einträge gefunden._"])
-    for idx, item in enumerate(items, 1):
+    for idx, item in enumerate(results, 1):
         lines.extend(["", f"### {idx}."])
         if isinstance(item, dict):
             for key, value in item.items():
@@ -428,6 +442,12 @@ def _to_markdown(payload: dict) -> str:
     token = payload.get("next_page_token")
     if token:
         lines.extend(["", f"_Weitere Ergebnisse: page_token=`{token}`_"])
+
+    source = payload.get("source")
+    if isinstance(source, dict) and source.get("name"):
+        lines.extend(
+            ["", f"_Quelle: {source['name']} — Lizenz: {source.get('license', 'n/a')}_"]
+        )
 
     return "\n".join(lines)
 
@@ -742,7 +762,7 @@ async def swiss_ip_search_trademarks(params: TrademarkSearchInput) -> str:
             - response_format (str): 'markdown' oder 'json'
 
     Returns:
-        str: Ergebnis mit total, count, items, next_page_token
+        str: Ergebnis mit source, total, count, results, next_page_token
     """
     sort_dir = "Descending" if params.sort_descending else "Ascending"
     query_xml = f"<Any>{_esc(params.query)}</Any>"
@@ -782,7 +802,7 @@ async def swiss_ip_search_trademarks_by_owner(
             - response_format (str): 'markdown' oder 'json'
 
     Returns:
-        str: Ergebnis mit total, count, items, next_page_token
+        str: Ergebnis mit source, total, count, results, next_page_token
     """
     # Trademark owner fields are searched via Any (the API's full-text field
     # covers holder/applicant names in the index).
@@ -819,7 +839,7 @@ async def swiss_ip_get_trademark(params: TrademarkNumberInput) -> str:
             - response_format (str): 'markdown' oder 'json'
 
     Returns:
-        str: Ergebnis mit total, count, items (einzelner Eintrag), next_page_token
+        str: Ergebnis mit source, total, count, results (einzelner Eintrag), next_page_token
     """
     query_xml = f"<Id>{_esc(params.trademark_number)}</Id>"
     xml_body = _build_trademark_search(query_xml, page_size=1)
@@ -862,7 +882,7 @@ async def swiss_ip_search_trademarks_by_class(
             - response_format (str): 'markdown' oder 'json'
 
     Returns:
-        str: Ergebnis mit total, count, items, next_page_token
+        str: Ergebnis mit source, total, count, results, next_page_token
     """
     # Combine class filter with optional text query
     class_query = f"<Any>Klasse {params.nice_class}</Any>"
@@ -914,7 +934,7 @@ async def swiss_ip_search_patents(params: PatentSearchInput) -> str:
             - response_format (str): 'markdown' oder 'json'
 
     Returns:
-        str: Ergebnis mit total, count, items, next_page_token
+        str: Ergebnis mit source, total, count, results, next_page_token
     """
     sort_dir = "Descending" if params.sort_descending else "Ascending"
     query_xml = f"<Any>{_esc(params.query)}</Any>"
@@ -950,7 +970,7 @@ async def swiss_ip_get_patent(params: PatentNumberInput) -> str:
             - response_format (str): 'markdown' oder 'json'
 
     Returns:
-        str: Ergebnis mit total, count, items (einzelner Eintrag), next_page_token
+        str: Ergebnis mit source, total, count, results (einzelner Eintrag), next_page_token
     """
     query_xml = f"<Id>{_esc(params.patent_number)}</Id>"
     xml_body = _build_patent_search(query_xml, page_size=1)
@@ -994,7 +1014,7 @@ async def swiss_ip_search_patents_by_applicant(
             - response_format (str): 'markdown' oder 'json'
 
     Returns:
-        str: Ergebnis mit total, count, items, next_page_token
+        str: Ergebnis mit source, total, count, results, next_page_token
     """
     query_xml = f"<Any>{_esc(params.applicant_name)}</Any>"
     xml_body = _build_patent_search(
@@ -1033,7 +1053,7 @@ async def swiss_ip_search_patent_publications(
             - response_format (str): 'markdown' oder 'json'
 
     Returns:
-        str: Ergebnis mit total, count, items, next_page_token
+        str: Ergebnis mit source, total, count, results, next_page_token
     """
     query_xml = f"<Any>{_esc(params.query)}</Any>"
     xml_body = _build_patent_pub_search(
@@ -1074,7 +1094,7 @@ async def swiss_ip_search_spc(params: SpcSearchInput) -> str:
             - response_format (str): 'markdown' oder 'json'
 
     Returns:
-        str: Ergebnis mit total, count, items (ESZ-Einträge), next_page_token
+        str: Ergebnis mit source, total, count, results (ESZ-Einträge), next_page_token
     """
     query_xml = f"<Any>{_esc(params.query)}</Any>"
     xml_body = _build_spc_search(query_xml, params.page_size, params.page_token)
@@ -1115,7 +1135,7 @@ async def swiss_ip_search_recent_filings(params: DateRangeInput) -> str:
             - response_format (str): 'markdown' oder 'json'
 
     Returns:
-        str: Ergebnis mit total, count, items, next_page_token, date_range
+        str: Ergebnis mit source, total, count, results, next_page_token, date_range
     """
     query_xml = (
         f'<LastUpdate from="{_esc(params.date_from)}" '
@@ -1173,7 +1193,8 @@ async def swiss_ip_get_quota() -> str:
     try:
         root = await _call_api(_quota_request())
         quota_dict = _el_to_dict(root)
-        return json.dumps(quota_dict, ensure_ascii=False, indent=2)
+        payload = {"source": DATA_SOURCE, "quota": quota_dict}
+        return json.dumps(payload, ensure_ascii=False, indent=2)
     except Exception as e:  # quota has no response_format — always JSON
         mark_error(True)
         return json.dumps({"error": _handle_error(e)}, ensure_ascii=False)

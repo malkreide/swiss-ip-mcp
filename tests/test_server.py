@@ -175,6 +175,30 @@ class TestErrorHandler:
 # Unit tests – tools (mocked API)
 # ---------------------------------------------------------------------------
 
+class TestProvenance:
+    @pytest.mark.asyncio
+    async def test_search_envelope_has_source_and_results(self):
+        # CH-004 / SDK-002: every response carries provenance + a results envelope.
+        root = _make_root(SAMPLE_TM_XML)
+        with patch("swiss_ip_mcp.server._call_api", new=AsyncMock(return_value=root)):
+            from swiss_ip_mcp.server import TrademarkSearchInput
+            result = json.loads(
+                await swiss_ip_search_trademarks(TrademarkSearchInput(query="x"))
+            )
+        assert result["source"]["name"].startswith("Swissreg")
+        assert "license" in result["source"]
+        assert isinstance(result["results"], list)
+        assert result["count"] == len(result["results"])
+
+    @pytest.mark.asyncio
+    async def test_quota_has_source(self):
+        root = _make_root(SAMPLE_QUOTA_XML)
+        with patch("swiss_ip_mcp.server._call_api", new=AsyncMock(return_value=root)):
+            result = json.loads(await swiss_ip_get_quota())
+        assert result["source"]["provider"].startswith("Swiss Federal Institute")
+        assert "quota" in result
+
+
 class TestTrademarkTools:
     @pytest.mark.asyncio
     async def test_search_trademarks_success(self):
@@ -475,22 +499,26 @@ class TestResponseFormat:
     def test_render_json_is_parseable(self):
         from swiss_ip_mcp.server import ResponseFormat, _render
 
-        out = _render({"count": 1, "items": [{"a": "b"}]}, ResponseFormat.JSON)
+        out = _render({"count": 1, "results": [{"a": "b"}]}, ResponseFormat.JSON)
         assert json.loads(out)["count"] == 1
 
-    def test_render_markdown_has_headers_and_fields(self):
-        from swiss_ip_mcp.server import ResponseFormat, _render
+    def test_render_markdown_has_headers_fields_and_source(self):
+        from swiss_ip_mcp.server import DATA_SOURCE, ResponseFormat, _render
 
         payload = {
+            "source": DATA_SOURCE,
             "total": "42",
             "count": 1,
-            "items": [{"MarkName": "ZÜRITEST", "Status": "Registered"}],
+            "results": [{"MarkName": "ZÜRITEST", "Status": "Registered"}],
             "next_page_token": "tok123",
         }
         out = _render(payload, ResponseFormat.MARKDOWN)
         assert out.startswith("## Ergebnisse (1 von 42)")
         assert "**MarkName:** ZÜRITEST" in out
         assert "tok123" in out
+        # source provenance footer, but the raw source dict is not dumped inline
+        assert "_Quelle: Swissreg" in out
+        assert "**source:**" not in out
         # not JSON
         with pytest.raises(json.JSONDecodeError):
             json.loads(out)
