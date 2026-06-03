@@ -934,6 +934,57 @@ class TestDeployment:
 # Unit tests – egress allow-list & tool manifest (SEC-021, SEC-022)
 # ---------------------------------------------------------------------------
 
+class TestCredentialsSecret:
+    def test_credentials_are_secretstr_and_masked(self, monkeypatch):
+        # ARCH-005: credentials held as SecretStr, never leaked via repr.
+        import swiss_ip_mcp.server as srv
+
+        monkeypatch.setenv("IGE_USERNAME", "alice")
+        monkeypatch.setenv("IGE_PASSWORD", "s3cr3t-pw")
+        creds = srv._load_credentials()
+        assert creds.username.get_secret_value() == "alice"
+        assert creds.password.get_secret_value() == "s3cr3t-pw"
+        assert "s3cr3t-pw" not in repr(creds)
+        assert "s3cr3t-pw" not in str(creds)
+
+    def test_missing_credentials_raise(self, monkeypatch):
+        import swiss_ip_mcp.server as srv
+
+        monkeypatch.delenv("IGE_USERNAME", raising=False)
+        monkeypatch.delenv("IGE_PASSWORD", raising=False)
+        with pytest.raises(ValueError, match="Zugangsdaten fehlen"):
+            srv._load_credentials()
+
+
+class TestProgressReporting:
+    @pytest.mark.asyncio
+    async def test_call_api_reports_progress_with_ctx(self, monkeypatch):
+        # SDK-003: when a ctx is passed, progress is reported around the call.
+        import httpx
+        import respx
+
+        import swiss_ip_mcp.server as srv
+
+        monkeypatch.setenv("IGE_USERNAME", "u")
+        monkeypatch.setenv("IGE_PASSWORD", "p")
+        srv._token_cache["token"] = None
+        srv._token_cache["expires_at"] = 0.0
+        srv._client = None
+        ctx = AsyncMock()
+
+        with respx.mock as mock:
+            mock.post(srv.IDP_TOKEN_URL).mock(
+                return_value=httpx.Response(200, json={"access_token": "t", "expires_in": 300})
+            )
+            mock.post(srv.API_ENDPOINT).mock(
+                return_value=httpx.Response(200, content=SAMPLE_TM_XML.encode("utf-8"))
+            )
+            await srv._call_api("<x/>", ctx)
+
+        assert ctx.report_progress.await_count == 2
+        srv._token_cache["token"] = None
+
+
 class TestEgressAllowList:
     def test_allows_fixed_ige_hosts(self):
         import swiss_ip_mcp.server as srv
