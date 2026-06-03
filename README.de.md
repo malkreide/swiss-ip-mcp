@@ -96,6 +96,15 @@ mit `match_type: "none"` und einer `message`.
 
 ---
 
+## Projektphase
+
+Dieser Server befindet sich in **Phase 1 (read-only)** des MCP-Phasenmodells:
+alle Tools sind ausschliesslich lesend und schreiben nichts. Der Phasenplan und
+die Voraussetzungen für eine künftige schreibfähige Phase stehen in
+[`ROADMAP.md`](ROADMAP.md).
+
+---
+
 ## Architektur
 
 ```

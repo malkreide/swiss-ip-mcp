@@ -23,10 +23,10 @@ from typing import Any, Literal, Optional
 from urllib.parse import urlparse
 
 import httpx
-from mcp.server.fastmcp import FastMCP
+from mcp.server.fastmcp import Context, FastMCP
 from mcp.server.fastmcp.exceptions import ToolError
 from mcp.server.transport_security import TransportSecuritySettings
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, SecretStr
 
 from swiss_ip_mcp.logging_config import get_logger, setup_logging
 from swiss_ip_mcp.telemetry import setup_telemetry, traced_tool
@@ -124,11 +124,16 @@ async def _lifespan(_server: FastMCP) -> AsyncIterator[dict]:
         logger.info("lifespan_stopped")
 
 
-async def _get_token(client: httpx.AsyncClient) -> str:
-    """Obtain or refresh a Bearer token from the IGE IDP."""
+class _Credentials(BaseModel):
+    """IGE credentials held as SecretStr so they never leak via repr/logs (ARCH-005)."""
+
+    username: SecretStr
+    password: SecretStr
+
+
+def _load_credentials() -> _Credentials:
     username = os.getenv("IGE_USERNAME", "")
     password = os.getenv("IGE_PASSWORD", "")
-
     if not username or not password:
         raise ValueError(
             "IGE-Zugangsdaten fehlen. "
@@ -137,6 +142,12 @@ async def _get_token(client: httpx.AsyncClient) -> str:
             "uebersicht-dienstleistungen/digitales-angebot/ip-daten/"
             "datenabgabe-api) erhalten Sie die Zugangsdaten."
         )
+    return _Credentials(username=SecretStr(username), password=SecretStr(password))
+
+
+async def _get_token(client: httpx.AsyncClient) -> str:
+    """Obtain or refresh a Bearer token from the IGE IDP."""
+    creds = _load_credentials()
 
     now = time.time()
     if _token_cache["token"] and now < _token_cache["expires_at"] - 30:
@@ -148,8 +159,8 @@ async def _get_token(client: httpx.AsyncClient) -> str:
         data={
             "grant_type": "password",
             "client_id": CLIENT_ID,
-            "username": username,
-            "password": password,
+            "username": creds.username.get_secret_value(),
+            "password": creds.password.get_secret_value(),
         },
         timeout=REQUEST_TIMEOUT,
     )
@@ -163,12 +174,18 @@ async def _get_token(client: httpx.AsyncClient) -> str:
     return token
 
 
-async def _call_api(xml_body: str) -> ET.Element:
-    """Post an XML request to the Swissreg API and return the root element."""
+async def _call_api(xml_body: str, ctx: Optional[Context] = None) -> ET.Element:
+    """Post an XML request to the Swissreg API and return the root element.
+
+    When a tool passes its `ctx`, progress is reported around the request so
+    long-running calls (the API allows up to 60s) surface progress (SDK-003).
+    """
     client = _get_client()
     token = await _get_token(client)
     logger.debug("swissreg_api_request", bytes=len(xml_body))
     _assert_host_allowed(API_ENDPOINT)
+    if ctx is not None:
+        await ctx.report_progress(progress=0.0, total=1.0, message="Abfrage an Swissreg…")
     resp = await client.post(
         API_ENDPOINT,
         content=xml_body.encode("utf-8"),
@@ -180,6 +197,8 @@ async def _call_api(xml_body: str) -> ET.Element:
         timeout=REQUEST_TIMEOUT,
     )
     resp.raise_for_status()
+    if ctx is not None:
+        await ctx.report_progress(progress=1.0, total=1.0)
     return ET.fromstring(resp.content)
 
 
@@ -718,7 +737,7 @@ class SpcSearchInput(BaseModel):
     },
 )
 @traced_tool
-async def swiss_ip_search_trademarks(params: TrademarkSearchInput) -> SearchEnvelope:
+async def swiss_ip_search_trademarks(params: TrademarkSearchInput, ctx: Optional[Context] = None) -> SearchEnvelope:
     """Durchsucht das Schweizer Markenregister nach Freitext.
     <use_case>Markenrecherche / Brand-Monitoring per Name, Wort oder Stichwort.</use_case>
     Findet Marken nach Name, Markenbegriff oder Stichwort. Wildcards (*) möglich.
@@ -739,7 +758,7 @@ async def swiss_ip_search_trademarks(params: TrademarkSearchInput) -> SearchEnve
         query_xml, params.page_size, params.page_token, sort_dir=sort_dir
     )
     try:
-        root = await _call_api(xml_body)
+        root = await _call_api(xml_body, ctx)
         result = _parse_result_page(root)
         return result
     except Exception as e:
@@ -759,6 +778,7 @@ async def swiss_ip_search_trademarks(params: TrademarkSearchInput) -> SearchEnve
 @traced_tool
 async def swiss_ip_search_trademarks_by_owner(
     params: TrademarkOwnerSearchInput,
+    ctx: Optional[Context] = None,
 ) -> SearchEnvelope:
     """Durchsucht Schweizer Marken gefiltert nach Inhaber / Anmelder.
     <use_case>Portfolio-Analyse: alle Marken eines Inhabers/Anmelders finden.</use_case>
@@ -780,7 +800,7 @@ async def swiss_ip_search_trademarks_by_owner(
         query_xml, params.page_size, params.page_token
     )
     try:
-        root = await _call_api(xml_body)
+        root = await _call_api(xml_body, ctx)
         result = _parse_result_page(root)
         return result
     except Exception as e:
@@ -798,7 +818,7 @@ async def swiss_ip_search_trademarks_by_owner(
     },
 )
 @traced_tool
-async def swiss_ip_get_trademark(params: TrademarkNumberInput) -> SearchEnvelope:
+async def swiss_ip_get_trademark(params: TrademarkNumberInput, ctx: Optional[Context] = None) -> SearchEnvelope:
     """Ruft eine bestimmte Schweizer Marke anhand der Anmelde-/Registernummer ab.
     <use_case>Detail-Abruf einer Marke per Anmelde-/Registernummer.</use_case>
     <important_notes>Exakter Lookup; bei unbekannter Nummer match_type="none".</important_notes>
@@ -814,7 +834,7 @@ async def swiss_ip_get_trademark(params: TrademarkNumberInput) -> SearchEnvelope
     query_xml = f"<Id>{_esc(params.trademark_number)}</Id>"
     xml_body = _build_trademark_search(query_xml, page_size=1)
     try:
-        root = await _call_api(xml_body)
+        root = await _call_api(xml_body, ctx)
         result = _parse_result_page(root)
         if result.count == 0:
             # A specific number not existing is a valid empty result, not an
@@ -842,6 +862,7 @@ async def swiss_ip_get_trademark(params: TrademarkNumberInput) -> SearchEnvelope
 @traced_tool
 async def swiss_ip_search_trademarks_by_class(
     params: TrademarkClassInput,
+    ctx: Optional[Context] = None,
 ) -> SearchEnvelope:
     """Durchsucht Schweizer Marken nach Nizza-Klassifikation.
     <use_case>Branchenanalyse: Marken einer Nizza-Klasse (1-45) finden.</use_case>
@@ -871,7 +892,7 @@ async def swiss_ip_search_trademarks_by_class(
         query_xml, params.page_size, params.page_token
     )
     try:
-        root = await _call_api(xml_body)
+        root = await _call_api(xml_body, ctx)
         result = _parse_result_page(root)
         result.nice_class_searched = params.nice_class
         return result
@@ -894,7 +915,7 @@ async def swiss_ip_search_trademarks_by_class(
     },
 )
 @traced_tool
-async def swiss_ip_search_patents(params: PatentSearchInput) -> SearchEnvelope:
+async def swiss_ip_search_patents(params: PatentSearchInput, ctx: Optional[Context] = None) -> SearchEnvelope:
     """Durchsucht das Schweizer Patentregister nach Freitext.
     <use_case>Technologie-/Innovationsrecherche in Schweizer Patenten.</use_case>
     Gibt CH-Patenteinträge inkl. Titel, Anmelder, IPC-Klassifikation, Daten und Rechtsstatus zurück.
@@ -915,7 +936,7 @@ async def swiss_ip_search_patents(params: PatentSearchInput) -> SearchEnvelope:
         query_xml, params.page_size, params.page_token, sort_dir=sort_dir
     )
     try:
-        root = await _call_api(xml_body)
+        root = await _call_api(xml_body, ctx)
         result = _parse_result_page(root)
         return result
     except Exception as e:
@@ -933,7 +954,7 @@ async def swiss_ip_search_patents(params: PatentSearchInput) -> SearchEnvelope:
     },
 )
 @traced_tool
-async def swiss_ip_get_patent(params: PatentNumberInput) -> SearchEnvelope:
+async def swiss_ip_get_patent(params: PatentNumberInput, ctx: Optional[Context] = None) -> SearchEnvelope:
     """Ruft ein bestimmtes Schweizer Patent anhand seiner Nummer ab.
     <use_case>Detail-Abruf eines Patents per Nummer.</use_case>
     <important_notes>Exakter Lookup; kein Fuzzy-Match.</important_notes>
@@ -949,7 +970,7 @@ async def swiss_ip_get_patent(params: PatentNumberInput) -> SearchEnvelope:
     query_xml = f"<Id>{_esc(params.patent_number)}</Id>"
     xml_body = _build_patent_search(query_xml, page_size=1)
     try:
-        root = await _call_api(xml_body)
+        root = await _call_api(xml_body, ctx)
         result = _parse_result_page(root)
         if result.count == 0:
             # Valid empty result, not an execution error (OBS-001).
@@ -976,6 +997,7 @@ async def swiss_ip_get_patent(params: PatentNumberInput) -> SearchEnvelope:
 @traced_tool
 async def swiss_ip_search_patents_by_applicant(
     params: PatentApplicantInput,
+    ctx: Optional[Context] = None,
 ) -> SearchEnvelope:
     """Durchsucht Schweizer Patente nach Anmelder oder Erfinder.
     <use_case>Innovationsmonitoring: Patente eines Anmelders/Erfinders.</use_case>
@@ -995,7 +1017,7 @@ async def swiss_ip_search_patents_by_applicant(
         query_xml, params.page_size, params.page_token
     )
     try:
-        root = await _call_api(xml_body)
+        root = await _call_api(xml_body, ctx)
         result = _parse_result_page(root)
         return result
     except Exception as e:
@@ -1015,6 +1037,7 @@ async def swiss_ip_search_patents_by_applicant(
 @traced_tool
 async def swiss_ip_search_patent_publications(
     params: PatentSearchInput,
+    ctx: Optional[Context] = None,
 ) -> SearchEnvelope:
     """Durchsucht Schweizer Patentpublikationen (offizielle Veröffentlichungen).
     <use_case>Stand-der-Technik-Recherche ueber Patentpublikationen.</use_case>
@@ -1034,7 +1057,7 @@ async def swiss_ip_search_patent_publications(
         query_xml, params.page_size, params.page_token
     )
     try:
-        root = await _call_api(xml_body)
+        root = await _call_api(xml_body, ctx)
         result = _parse_result_page(root)
         return result
     except Exception as e:
@@ -1056,7 +1079,7 @@ async def swiss_ip_search_patent_publications(
     },
 )
 @traced_tool
-async def swiss_ip_search_spc(params: SpcSearchInput) -> SearchEnvelope:
+async def swiss_ip_search_spc(params: SpcSearchInput, ctx: Optional[Context] = None) -> SearchEnvelope:
     """Durchsucht Schweizer Ergänzende Schutzzertifikate (ESZ / SPC).
     <use_case>Pharma/Pflanzenschutz: ESZ/SPC recherchieren.</use_case>
     ESZ verlängern den Patentschutz für Arzneimittel und Pflanzenschutzmittel.
@@ -1073,7 +1096,7 @@ async def swiss_ip_search_spc(params: SpcSearchInput) -> SearchEnvelope:
     query_xml = f"<Any>{_esc(params.query)}</Any>"
     xml_body = _build_spc_search(query_xml, params.page_size, params.page_token)
     try:
-        root = await _call_api(xml_body)
+        root = await _call_api(xml_body, ctx)
         result = _parse_result_page(root)
         return result
     except Exception as e:
@@ -1095,7 +1118,7 @@ async def swiss_ip_search_spc(params: SpcSearchInput) -> SearchEnvelope:
     },
 )
 @traced_tool
-async def swiss_ip_search_recent_filings(params: DateRangeInput) -> SearchEnvelope:
+async def swiss_ip_search_recent_filings(params: DateRangeInput, ctx: Optional[Context] = None) -> SearchEnvelope:
     """Durchsucht Schweizer IP-Eintragungen innerhalb eines Datumsbereichs.
     <use_case>Zeitraum-/Trendanalyse neuer IP-Eintragungen je Schutzrecht.</use_case>
     <important_notes>date_to ist exklusiv; ip_type aus 4 Werten.</important_notes>
@@ -1135,7 +1158,7 @@ async def swiss_ip_search_recent_filings(params: DateRangeInput) -> SearchEnvelo
                 query_xml, params.page_size, params.page_token
             )
 
-        root = await _call_api(xml_body)
+        root = await _call_api(xml_body, ctx)
         result = _parse_result_page(root)
         result.date_range = {
             "from": params.date_from,
@@ -1158,7 +1181,7 @@ async def swiss_ip_search_recent_filings(params: DateRangeInput) -> SearchEnvelo
     },
 )
 @traced_tool
-async def swiss_ip_get_quota() -> QuotaEnvelope:
+async def swiss_ip_get_quota(ctx: Optional[Context] = None) -> QuotaEnvelope:
     """Prüft das verbleibende Datentransfer-Kontingent der IGE Swissreg API.
     <use_case>Betriebsueberwachung: verbleibendes API-Kontingent pruefen.</use_case>
     Die API hat ein monatliches Kontingent. Damit lässt sich die Nutzung überwachen.
@@ -1167,7 +1190,7 @@ async def swiss_ip_get_quota() -> QuotaEnvelope:
         str: JSON mit Kontingent-Details inkl. genutztem und verbleibendem Volumen
     """
     try:
-        root = await _call_api(_quota_request())
+        root = await _call_api(_quota_request(), ctx)
         quota_dict = _el_to_dict(root)
         if not isinstance(quota_dict, dict):
             quota_dict = {"value": quota_dict}

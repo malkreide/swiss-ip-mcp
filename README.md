@@ -96,6 +96,14 @@ with `match_type: "none"` and a `message`.
 
 ---
 
+## Project Phase
+
+This server is in **Phase 1 (read-only)** of the MCP phased-rollout model: every
+tool is read-only and writes nothing. See [`ROADMAP.md`](ROADMAP.md) for the
+phase plan and the prerequisites for any future write-capable phase.
+
+---
+
 ## Architecture
 
 ```

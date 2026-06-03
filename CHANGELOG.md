@@ -5,6 +5,21 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+- **Progress reporting** (SDK-003): tools accept an injected `ctx: Context` and
+  report progress around the (up to 60s) Swissreg API call via
+  `ctx.report_progress`. `ctx` is excluded from the tool input schema, so the
+  tool manifest is unchanged.
+- **Secret-scanning CI** (ARCH-005): a gitleaks workflow scans PRs and `main`
+  for accidentally committed secrets.
+- **Phase declaration + roadmap** (OPS-003): the README declares Phase 1
+  (read-only) and a new `ROADMAP.md` documents the phased rollout and the
+  prerequisites for future phases.
+
+### Changed
+- **Credentials are now held as `pydantic.SecretStr`** (ARCH-005) via a typed
+  `_Credentials` model, so they cannot leak through `repr()` / logs.
+
 ## [1.1.0] - 2026-06-03
 
 Audit-hardening release. Closes every blocking finding from the mcp-audit-skill
