@@ -6,6 +6,11 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ## [Unreleased]
 
 ### Added
+- **Tool ergonomics** (ARCH-002 / ARCH-003): every tool description now carries a
+  `<use_case>` tag (plus `<important_notes>` where relevant). Search/list
+  responses include a `match_type` field (`exact` / `none`) and, on empty
+  results, an actionable `suggestion` instead of a bare empty list. Number
+  lookups are documented as exact-only.
 - **Response provenance + envelope** (CH-004 / SDK-002): every tool response now
   carries a `source` block (provider, source URL, license). Search/list tools
   use a consistent envelope `{ source, total, count, results, next_page_token }`
