@@ -42,6 +42,10 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   update policy.
 
 ### Fixed
+- Tool-manifest fingerprints (SEC-022) are now stable across Python versions:
+  the description is normalised with `inspect.cleandoc` before hashing, so
+  Python 3.13's compile-time docstring dedenting no longer breaks
+  `TestToolManifest` on the 3.13 CI job. Manifest regenerated.
 - Consolidated the duplicate `[1.0.0]` CHANGELOG entries (which carried two
   conflicting dates) into a single coherent release section.
 - **Structured logging** (OBS-003): logs are now emitted as JSON on stderr via

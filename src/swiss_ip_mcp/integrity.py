@@ -15,6 +15,7 @@ cannot be confused with another server's tools.
 from __future__ import annotations
 
 import hashlib
+import inspect
 import json
 from typing import Any
 
@@ -22,13 +23,18 @@ TOOL_NAMESPACE_PREFIX = "swiss_ip_"
 
 
 def fingerprint_tool(tool: Any) -> str:
-    """Stable SHA-256 over a tool's externally visible definition."""
+    """Stable SHA-256 over a tool's externally visible definition.
+
+    The description is normalised with ``inspect.cleandoc`` so the fingerprint
+    is stable across Python versions: Python 3.13 dedents docstrings at compile
+    time, which would otherwise change every hash relative to 3.11/3.12.
+    """
     annotations = None
     if getattr(tool, "annotations", None) is not None:
         annotations = tool.annotations.model_dump(mode="json")
     payload = {
         "name": tool.name,
-        "description": tool.description or "",
+        "description": inspect.cleandoc(tool.description or ""),
         "inputSchema": tool.inputSchema,
         "annotations": annotations,
     }
