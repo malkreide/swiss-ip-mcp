@@ -28,6 +28,8 @@ from mcp.server.fastmcp import FastMCP
 from mcp.server.transport_security import TransportSecuritySettings
 from pydantic import BaseModel, ConfigDict, Field
 
+from swiss_ip_mcp.telemetry import mark_error, setup_telemetry, traced_tool
+
 # ---------------------------------------------------------------------------
 # Logging
 # ---------------------------------------------------------------------------
@@ -432,6 +434,7 @@ def _to_markdown(payload: dict) -> str:
 
 def _render(payload: dict, fmt: ResponseFormat) -> str:
     """Serialise a tool result in the requested response format."""
+    mark_error("error" in payload)
     if fmt == ResponseFormat.MARKDOWN:
         return _to_markdown(payload)
     return json.dumps(payload, ensure_ascii=False, indent=2)
@@ -725,6 +728,7 @@ class SpcSearchInput(BaseModel):
         "openWorldHint": True,
     },
 )
+@traced_tool
 async def swiss_ip_search_trademarks(params: TrademarkSearchInput) -> str:
     """Durchsucht das Schweizer Markenregister nach Freitext.
     Findet Marken nach Name, Markenbegriff oder Stichwort. Wildcards (*) möglich.
@@ -763,6 +767,7 @@ async def swiss_ip_search_trademarks(params: TrademarkSearchInput) -> str:
         "openWorldHint": True,
     },
 )
+@traced_tool
 async def swiss_ip_search_trademarks_by_owner(
     params: TrademarkOwnerSearchInput,
 ) -> str:
@@ -803,6 +808,7 @@ async def swiss_ip_search_trademarks_by_owner(
         "openWorldHint": True,
     },
 )
+@traced_tool
 async def swiss_ip_get_trademark(params: TrademarkNumberInput) -> str:
     """Ruft eine bestimmte Schweizer Marke anhand der Anmelde-/Registernummer ab.
     Gibt detaillierten Datensatz inkl. Status, Waren-/Dienstleistungsklassen und Registrierungshistorie zurück.
@@ -840,6 +846,7 @@ async def swiss_ip_get_trademark(params: TrademarkNumberInput) -> str:
         "openWorldHint": True,
     },
 )
+@traced_tool
 async def swiss_ip_search_trademarks_by_class(
     params: TrademarkClassInput,
 ) -> str:
@@ -893,6 +900,7 @@ async def swiss_ip_search_trademarks_by_class(
         "openWorldHint": True,
     },
 )
+@traced_tool
 async def swiss_ip_search_patents(params: PatentSearchInput) -> str:
     """Durchsucht das Schweizer Patentregister nach Freitext.
     Gibt CH-Patenteinträge inkl. Titel, Anmelder, IPC-Klassifikation, Daten und Rechtsstatus zurück.
@@ -931,6 +939,7 @@ async def swiss_ip_search_patents(params: PatentSearchInput) -> str:
         "openWorldHint": True,
     },
 )
+@traced_tool
 async def swiss_ip_get_patent(params: PatentNumberInput) -> str:
     """Ruft ein bestimmtes Schweizer Patent anhand seiner Nummer ab.
     Gibt vollständigen Datensatz inkl. IPC-Codes, Anmelder, Erfinder und Status zurück.
@@ -970,6 +979,7 @@ async def swiss_ip_get_patent(params: PatentNumberInput) -> str:
         "openWorldHint": True,
     },
 )
+@traced_tool
 async def swiss_ip_search_patents_by_applicant(
     params: PatentApplicantInput,
 ) -> str:
@@ -1008,6 +1018,7 @@ async def swiss_ip_search_patents_by_applicant(
         "openWorldHint": True,
     },
 )
+@traced_tool
 async def swiss_ip_search_patent_publications(
     params: PatentSearchInput,
 ) -> str:
@@ -1050,6 +1061,7 @@ async def swiss_ip_search_patent_publications(
         "openWorldHint": True,
     },
 )
+@traced_tool
 async def swiss_ip_search_spc(params: SpcSearchInput) -> str:
     """Durchsucht Schweizer Ergänzende Schutzzertifikate (ESZ / SPC).
     ESZ verlängern den Patentschutz für Arzneimittel und Pflanzenschutzmittel.
@@ -1088,6 +1100,7 @@ async def swiss_ip_search_spc(params: SpcSearchInput) -> str:
         "openWorldHint": True,
     },
 )
+@traced_tool
 async def swiss_ip_search_recent_filings(params: DateRangeInput) -> str:
     """Durchsucht Schweizer IP-Eintragungen innerhalb eines Datumsbereichs.
     Unterstützt Marken, Patente, Patentpublikationen und ESZ.
@@ -1149,6 +1162,7 @@ async def swiss_ip_search_recent_filings(params: DateRangeInput) -> str:
         "openWorldHint": True,
     },
 )
+@traced_tool
 async def swiss_ip_get_quota() -> str:
     """Prüft das verbleibende Datentransfer-Kontingent der IGE Swissreg API.
     Die API hat ein monatliches Kontingent. Damit lässt sich die Nutzung überwachen.
@@ -1161,6 +1175,7 @@ async def swiss_ip_get_quota() -> str:
         quota_dict = _el_to_dict(root)
         return json.dumps(quota_dict, ensure_ascii=False, indent=2)
     except Exception as e:  # quota has no response_format — always JSON
+        mark_error(True)
         return json.dumps({"error": _handle_error(e)}, ensure_ascii=False)
 
 
@@ -1216,6 +1231,7 @@ def _run_http(transport: str) -> None:
 def main() -> None:
     """Run the server. Transport is stdio by default; set MCP_TRANSPORT=sse or
     MCP_TRANSPORT=streamable-http for cloud deployments."""
+    setup_telemetry()  # opt-in OpenTelemetry export (OBS-006); no-op when disabled
     transport = _resolve_transport()
     if transport == "stdio":
         mcp.run()

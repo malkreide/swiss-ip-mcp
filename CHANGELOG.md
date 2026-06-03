@@ -6,6 +6,11 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ## [Unreleased]
 
 ### Added
+- **Optional OpenTelemetry tracing** (`MCP_OTEL_ENABLED=1`, install
+  `swiss-ip-mcp[otel]`): one span per tool call (`mcp.tool.name`,
+  `mcp.tool.result.is_error`) plus httpx auto-instrumented child spans for
+  backend calls. Off by default and no-op without a provider; spans carry no
+  query args, credentials or response bodies.
 - **Streamable HTTP / SSE transport actually implemented** (was previously only
   documented). `main()` now selects the transport from `MCP_TRANSPORT`
   (`stdio` default, `sse`, `streamable-http`) and serves HTTP under uvicorn.
@@ -38,8 +43,9 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Remediates audit findings SCALE-001 (transport drift) and SDK-001 (client
   lifecycle); hardens SDK-004 (CORS), SEC-016 (host binding) and SEC-005
   (DNS-rebinding). Quick-wins address OBS-002 (error masking), ARCH-009
-  (`openWorldHint`) and SDK-003 (`response_format`). The HTTP endpoint remains
-  unauthenticated by design and serves only public IP-register data.
+  (`openWorldHint`) and SDK-003 (`response_format`); OBS-006 adds optional
+  distributed tracing. The HTTP endpoint remains unauthenticated by design and
+  serves only public IP-register data.
 
 ## [1.0.0] - 2026-03-29
 v1.0.0 — Initial Release
