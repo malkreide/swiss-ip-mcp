@@ -19,8 +19,7 @@ import xml.etree.ElementTree as ET
 import xml.sax.saxutils as saxutils
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
-from enum import StrEnum
-from typing import Optional
+from typing import Any, Literal, Optional
 from urllib.parse import urlparse
 
 import httpx
@@ -30,7 +29,7 @@ from mcp.server.transport_security import TransportSecuritySettings
 from pydantic import BaseModel, ConfigDict, Field
 
 from swiss_ip_mcp.logging_config import get_logger, setup_logging
-from swiss_ip_mcp.telemetry import mark_error, setup_telemetry, traced_tool
+from swiss_ip_mcp.telemetry import setup_telemetry, traced_tool
 
 # ---------------------------------------------------------------------------
 # Logging (structured JSON on stderr — OBS-003)
@@ -331,8 +330,8 @@ def _el_to_dict(el: ET.Element, depth: int = 0) -> dict | str:
     return result
 
 
-def _parse_result_page(root: ET.Element) -> dict:
-    """Extract items and pagination info from an API response."""
+def _parse_result_page(root: ET.Element) -> SearchEnvelope:
+    """Extract items and pagination info into a typed envelope (SDK-002)."""
     items = []
     for item_el in _find_all(root, "Item"):
         items.append(_el_to_dict(item_el))
@@ -355,22 +354,17 @@ def _parse_result_page(root: ET.Element) -> dict:
         break
 
     count = len(items)
-    envelope: dict = {
-        "source": DATA_SOURCE,
-        "total": total,
-        "count": count,
-        # ARCH-003: signal whether the search matched, so the LLM can react
-        # instead of reading a bare empty list. Number lookups override this.
-        "match_type": "exact" if count else "none",
-        "results": items,
-        "next_page_token": next_token,
-    }
-    if count == 0:
-        envelope["suggestion"] = (
-            "Keine Treffer. Suchbegriff mit Wildcard (*) erweitern, die "
-            "Schreibweise prüfen oder den Begriff verkürzen."
-        )
-    return envelope
+    # ARCH-003: match_type signals whether the search matched, so the LLM can
+    # react instead of reading a bare empty list. Number lookups override it.
+    return SearchEnvelope(
+        source=_PROVENANCE,
+        total=total,
+        count=count,
+        match_type="exact" if count else "none",
+        results=items,
+        next_page_token=next_token,
+        suggestion=_NO_MATCH_SUGGESTION if count == 0 else None,
+    )
 
 
 def _handle_error(e: Exception) -> str:
@@ -418,77 +412,50 @@ def _handle_error(e: Exception) -> str:
 
 
 # ---------------------------------------------------------------------------
-# Enums
+# Typed response models (SDK-002) — structured, validated tool returns
 # ---------------------------------------------------------------------------
 
-class ResponseFormat(StrEnum):
-    MARKDOWN = "markdown"
-    JSON = "json"
+MatchType = Literal["exact", "none"]
+
+_NO_MATCH_SUGGESTION = (
+    "Keine Treffer. Suchbegriff mit Wildcard (*) erweitern, die "
+    "Schreibweise prüfen oder den Begriff verkürzen."
+)
 
 
-# ---------------------------------------------------------------------------
-# Response rendering (SDK-003 — honour the response_format parameter)
-# ---------------------------------------------------------------------------
+class Provenance(BaseModel):
+    """Data-source attribution attached to every response (CH-004)."""
 
-def _scalarize(value: object) -> str:
-    """Render a value inline; nested structures fall back to compact JSON."""
-    if isinstance(value, (dict, list)):
-        return json.dumps(value, ensure_ascii=False)
-    return str(value)
-
-
-def _to_markdown(payload: dict) -> str:
-    """Render a result envelope as readable Markdown."""
-    if "error" in payload:
-        return f"**Fehler:** {payload['error']}"
-
-    lines: list[str] = []
-    total = payload.get("total")
-    count = payload.get("count")
-    header = "## Ergebnisse"
-    if total is not None:
-        header += f" ({count} von {total})"
-    elif count is not None:
-        header += f" ({count})"
-    lines.append(header)
-
-    # Top-level scalar metadata (e.g. nice_class_searched, date_range).
-    skip = {"source", "results", "total", "count", "next_page_token"}
-    for key, value in payload.items():
-        if key in skip:
-            continue
-        lines.append(f"- **{key}:** {_scalarize(value)}")
-
-    results = payload.get("results") or []
-    if not results:
-        lines.extend(["", "_Keine Einträge gefunden._"])
-    for idx, item in enumerate(results, 1):
-        lines.extend(["", f"### {idx}."])
-        if isinstance(item, dict):
-            for key, value in item.items():
-                lines.append(f"- **{key}:** {_scalarize(value)}")
-        else:
-            lines.append(f"- {_scalarize(item)}")
-
-    token = payload.get("next_page_token")
-    if token:
-        lines.extend(["", f"_Weitere Ergebnisse: page_token=`{token}`_"])
-
-    source = payload.get("source")
-    if isinstance(source, dict) and source.get("name"):
-        lines.extend(
-            ["", f"_Quelle: {source['name']} — Lizenz: {source.get('license', 'n/a')}_"]
-        )
-
-    return "\n".join(lines)
+    name: str
+    provider: str
+    url: str
+    license: str
+    license_url: str
 
 
-def _render(payload: dict, fmt: ResponseFormat) -> str:
-    """Serialise a tool result in the requested response format."""
-    mark_error("error" in payload)
-    if fmt == ResponseFormat.MARKDOWN:
-        return _to_markdown(payload)
-    return json.dumps(payload, ensure_ascii=False, indent=2)
+_PROVENANCE = Provenance.model_validate(DATA_SOURCE)
+
+
+class SearchEnvelope(BaseModel):
+    """Consistent, typed envelope for search/list tools (SDK-002)."""
+
+    source: Provenance = Field(default_factory=lambda: _PROVENANCE)
+    total: Optional[str] = None
+    count: int = 0
+    match_type: MatchType = "none"
+    results: list[dict[str, Any]] = Field(default_factory=list)
+    next_page_token: Optional[str] = None
+    suggestion: Optional[str] = None
+    message: Optional[str] = None
+    nice_class_searched: Optional[int] = None
+    date_range: Optional[dict[str, str]] = None
+
+
+class QuotaEnvelope(BaseModel):
+    """Typed envelope for the quota tool (SDK-002)."""
+
+    source: Provenance = Field(default_factory=lambda: _PROVENANCE)
+    quota: dict[str, Any] = Field(default_factory=dict)
 
 
 # ---------------------------------------------------------------------------
@@ -596,10 +563,6 @@ class TrademarkSearchInput(BaseModel):
         default=True,
         description="Nach letzter Aktualisierung absteigend sortieren (neueste zuerst).",
     )
-    response_format: ResponseFormat = Field(
-        default=ResponseFormat.JSON,
-        description="Ausgabeformat: 'markdown' oder 'json' (Standard: json).",
-    )
 
 
 class TrademarkOwnerSearchInput(BaseModel):
@@ -616,10 +579,6 @@ class TrademarkOwnerSearchInput(BaseModel):
     )
     page_size: int = Field(default=10, ge=1, le=50)
     page_token: Optional[str] = Field(default=None)
-    response_format: ResponseFormat = Field(
-        default=ResponseFormat.JSON,
-        description="Ausgabeformat: 'markdown' oder 'json' (Standard: json).",
-    )
 
 
 class TrademarkNumberInput(BaseModel):
@@ -633,10 +592,6 @@ class TrademarkNumberInput(BaseModel):
         ),
         min_length=1,
         max_length=50,
-    )
-    response_format: ResponseFormat = Field(
-        default=ResponseFormat.JSON,
-        description="Ausgabeformat: 'markdown' oder 'json' (Standard: json).",
     )
 
 
@@ -659,10 +614,6 @@ class TrademarkClassInput(BaseModel):
     )
     page_size: int = Field(default=10, ge=1, le=50)
     page_token: Optional[str] = Field(default=None)
-    response_format: ResponseFormat = Field(
-        default=ResponseFormat.JSON,
-        description="Ausgabeformat: 'markdown' oder 'json' (Standard: json).",
-    )
 
 
 class PatentSearchInput(BaseModel):
@@ -680,10 +631,6 @@ class PatentSearchInput(BaseModel):
     page_size: int = Field(default=10, ge=1, le=50)
     page_token: Optional[str] = Field(default=None)
     sort_descending: bool = Field(default=True)
-    response_format: ResponseFormat = Field(
-        default=ResponseFormat.JSON,
-        description="Ausgabeformat: 'markdown' oder 'json' (Standard: json).",
-    )
 
 
 class PatentNumberInput(BaseModel):
@@ -696,10 +643,6 @@ class PatentNumberInput(BaseModel):
         ),
         min_length=1,
         max_length=50,
-    )
-    response_format: ResponseFormat = Field(
-        default=ResponseFormat.JSON,
-        description="Ausgabeformat: 'markdown' oder 'json' (Standard: json).",
     )
 
 
@@ -717,10 +660,6 @@ class PatentApplicantInput(BaseModel):
     )
     page_size: int = Field(default=10, ge=1, le=50)
     page_token: Optional[str] = Field(default=None)
-    response_format: ResponseFormat = Field(
-        default=ResponseFormat.JSON,
-        description="Ausgabeformat: 'markdown' oder 'json' (Standard: json).",
-    )
 
 
 class DateRangeInput(BaseModel):
@@ -746,10 +685,6 @@ class DateRangeInput(BaseModel):
     )
     page_size: int = Field(default=10, ge=1, le=50)
     page_token: Optional[str] = Field(default=None)
-    response_format: ResponseFormat = Field(
-        default=ResponseFormat.JSON,
-        description="Ausgabeformat: 'markdown' oder 'json' (Standard: json).",
-    )
 
 
 class SpcSearchInput(BaseModel):
@@ -766,10 +701,6 @@ class SpcSearchInput(BaseModel):
     )
     page_size: int = Field(default=10, ge=1, le=50)
     page_token: Optional[str] = Field(default=None)
-    response_format: ResponseFormat = Field(
-        default=ResponseFormat.JSON,
-        description="Ausgabeformat: 'markdown' oder 'json' (Standard: json).",
-    )
 
 
 # ---------------------------------------------------------------------------
@@ -787,7 +718,7 @@ class SpcSearchInput(BaseModel):
     },
 )
 @traced_tool
-async def swiss_ip_search_trademarks(params: TrademarkSearchInput) -> str:
+async def swiss_ip_search_trademarks(params: TrademarkSearchInput) -> SearchEnvelope:
     """Durchsucht das Schweizer Markenregister nach Freitext.
     <use_case>Markenrecherche / Brand-Monitoring per Name, Wort oder Stichwort.</use_case>
     Findet Marken nach Name, Markenbegriff oder Stichwort. Wildcards (*) möglich.
@@ -798,7 +729,6 @@ async def swiss_ip_search_trademarks(params: TrademarkSearchInput) -> str:
             - page_size (int): Ergebnisse pro Seite (1–50, Standard 10)
             - page_token (str): Paginierungs-Token für Folgeseiten
             - sort_descending (bool): Neueste zuerst (Standard True)
-            - response_format (str): 'markdown' oder 'json'
 
     Returns:
         str: Ergebnis mit source, total, count, results, next_page_token
@@ -811,7 +741,7 @@ async def swiss_ip_search_trademarks(params: TrademarkSearchInput) -> str:
     try:
         root = await _call_api(xml_body)
         result = _parse_result_page(root)
-        return _render(result, params.response_format)
+        return result
     except Exception as e:
         raise ToolError(_handle_error(e)) from e
 
@@ -829,7 +759,7 @@ async def swiss_ip_search_trademarks(params: TrademarkSearchInput) -> str:
 @traced_tool
 async def swiss_ip_search_trademarks_by_owner(
     params: TrademarkOwnerSearchInput,
-) -> str:
+) -> SearchEnvelope:
     """Durchsucht Schweizer Marken gefiltert nach Inhaber / Anmelder.
     <use_case>Portfolio-Analyse: alle Marken eines Inhabers/Anmelders finden.</use_case>
     Nützlich für IP-Monitoring: alle Marken eines Unternehmens oder einer Person finden.
@@ -839,7 +769,6 @@ async def swiss_ip_search_trademarks_by_owner(
             - owner_name (str): Inhabername, z.B. 'Nestlé*', 'Stadt Zürich*'
             - page_size (int): Ergebnisse pro Seite (1–50)
             - page_token (str): Paginierungs-Token
-            - response_format (str): 'markdown' oder 'json'
 
     Returns:
         str: Ergebnis mit source, total, count, results, next_page_token
@@ -853,7 +782,7 @@ async def swiss_ip_search_trademarks_by_owner(
     try:
         root = await _call_api(xml_body)
         result = _parse_result_page(root)
-        return _render(result, params.response_format)
+        return result
     except Exception as e:
         raise ToolError(_handle_error(e)) from e
 
@@ -869,7 +798,7 @@ async def swiss_ip_search_trademarks_by_owner(
     },
 )
 @traced_tool
-async def swiss_ip_get_trademark(params: TrademarkNumberInput) -> str:
+async def swiss_ip_get_trademark(params: TrademarkNumberInput) -> SearchEnvelope:
     """Ruft eine bestimmte Schweizer Marke anhand der Anmelde-/Registernummer ab.
     <use_case>Detail-Abruf einer Marke per Anmelde-/Registernummer.</use_case>
     <important_notes>Exakter Lookup; bei unbekannter Nummer match_type="none".</important_notes>
@@ -878,7 +807,6 @@ async def swiss_ip_get_trademark(params: TrademarkNumberInput) -> str:
     Args:
         params (TrademarkNumberInput): Enthält:
             - trademark_number (str): Schweizer Markennummer, z.B. 'P-756123'
-            - response_format (str): 'markdown' oder 'json'
 
     Returns:
         str: Ergebnis mit source, total, count, results (einzelner Eintrag), next_page_token
@@ -888,18 +816,15 @@ async def swiss_ip_get_trademark(params: TrademarkNumberInput) -> str:
     try:
         root = await _call_api(xml_body)
         result = _parse_result_page(root)
-        if result["count"] == 0:
+        if result.count == 0:
             # A specific number not existing is a valid empty result, not an
             # execution error — keep isError=false (OBS-001).
-            return _render({
-                "source": DATA_SOURCE,
-                "match_type": "none",
-                "count": 0,
-                "results": [],
-                "message": f"Marke '{params.trademark_number}' nicht gefunden. "
-                           "Bitte Nummernformat prüfen (z.B. 'P-756123').",
-            }, params.response_format)
-        return _render(result, params.response_format)
+            result.suggestion = None
+            result.message = (
+                f"Marke '{params.trademark_number}' nicht gefunden. "
+                "Bitte Nummernformat prüfen (z.B. 'P-756123')."
+            )
+        return result
     except Exception as e:
         raise ToolError(_handle_error(e)) from e
 
@@ -917,7 +842,7 @@ async def swiss_ip_get_trademark(params: TrademarkNumberInput) -> str:
 @traced_tool
 async def swiss_ip_search_trademarks_by_class(
     params: TrademarkClassInput,
-) -> str:
+) -> SearchEnvelope:
     """Durchsucht Schweizer Marken nach Nizza-Klassifikation.
     <use_case>Branchenanalyse: Marken einer Nizza-Klasse (1-45) finden.</use_case>
     Nützlich für Wettbewerbsanalysen innerhalb einer Branche.
@@ -928,7 +853,6 @@ async def swiss_ip_search_trademarks_by_class(
             - query (str): Optionaler zusätzlicher Textfilter
             - page_size (int): Ergebnisse pro Seite
             - page_token (str): Paginierungs-Token
-            - response_format (str): 'markdown' oder 'json'
 
     Returns:
         str: Ergebnis mit source, total, count, results, next_page_token
@@ -949,8 +873,8 @@ async def swiss_ip_search_trademarks_by_class(
     try:
         root = await _call_api(xml_body)
         result = _parse_result_page(root)
-        result["nice_class_searched"] = params.nice_class
-        return _render(result, params.response_format)
+        result.nice_class_searched = params.nice_class
+        return result
     except Exception as e:
         raise ToolError(_handle_error(e)) from e
 
@@ -970,7 +894,7 @@ async def swiss_ip_search_trademarks_by_class(
     },
 )
 @traced_tool
-async def swiss_ip_search_patents(params: PatentSearchInput) -> str:
+async def swiss_ip_search_patents(params: PatentSearchInput) -> SearchEnvelope:
     """Durchsucht das Schweizer Patentregister nach Freitext.
     <use_case>Technologie-/Innovationsrecherche in Schweizer Patenten.</use_case>
     Gibt CH-Patenteinträge inkl. Titel, Anmelder, IPC-Klassifikation, Daten und Rechtsstatus zurück.
@@ -981,7 +905,6 @@ async def swiss_ip_search_patents(params: PatentSearchInput) -> str:
             - page_size (int): Ergebnisse pro Seite (1–50)
             - page_token (str): Paginierungs-Token
             - sort_descending (bool): Neueste zuerst
-            - response_format (str): 'markdown' oder 'json'
 
     Returns:
         str: Ergebnis mit source, total, count, results, next_page_token
@@ -994,7 +917,7 @@ async def swiss_ip_search_patents(params: PatentSearchInput) -> str:
     try:
         root = await _call_api(xml_body)
         result = _parse_result_page(root)
-        return _render(result, params.response_format)
+        return result
     except Exception as e:
         raise ToolError(_handle_error(e)) from e
 
@@ -1010,7 +933,7 @@ async def swiss_ip_search_patents(params: PatentSearchInput) -> str:
     },
 )
 @traced_tool
-async def swiss_ip_get_patent(params: PatentNumberInput) -> str:
+async def swiss_ip_get_patent(params: PatentNumberInput) -> SearchEnvelope:
     """Ruft ein bestimmtes Schweizer Patent anhand seiner Nummer ab.
     <use_case>Detail-Abruf eines Patents per Nummer.</use_case>
     <important_notes>Exakter Lookup; kein Fuzzy-Match.</important_notes>
@@ -1019,7 +942,6 @@ async def swiss_ip_get_patent(params: PatentNumberInput) -> str:
     Args:
         params (PatentNumberInput): Enthält:
             - patent_number (str): Schweizer Patentnummer, z.B. 'CH123456'
-            - response_format (str): 'markdown' oder 'json'
 
     Returns:
         str: Ergebnis mit source, total, count, results (einzelner Eintrag), next_page_token
@@ -1029,19 +951,14 @@ async def swiss_ip_get_patent(params: PatentNumberInput) -> str:
     try:
         root = await _call_api(xml_body)
         result = _parse_result_page(root)
-        if result["count"] == 0:
+        if result.count == 0:
             # Valid empty result, not an execution error (OBS-001).
-            return _render({
-                "source": DATA_SOURCE,
-                "match_type": "none",
-                "count": 0,
-                "results": [],
-                "message": (
-                    f"Patent '{params.patent_number}' nicht gefunden. "
-                    "Bitte Format prüfen (z.B. 'CH700123' oder '700123')."
-                ),
-            }, params.response_format)
-        return _render(result, params.response_format)
+            result.suggestion = None
+            result.message = (
+                f"Patent '{params.patent_number}' nicht gefunden. "
+                "Bitte Format prüfen (z.B. 'CH700123' oder '700123')."
+            )
+        return result
     except Exception as e:
         raise ToolError(_handle_error(e)) from e
 
@@ -1059,7 +976,7 @@ async def swiss_ip_get_patent(params: PatentNumberInput) -> str:
 @traced_tool
 async def swiss_ip_search_patents_by_applicant(
     params: PatentApplicantInput,
-) -> str:
+) -> SearchEnvelope:
     """Durchsucht Schweizer Patente nach Anmelder oder Erfinder.
     <use_case>Innovationsmonitoring: Patente eines Anmelders/Erfinders.</use_case>
     Nützlich für Wettbewerbsanalyse und Innovationsmonitoring.
@@ -1069,7 +986,6 @@ async def swiss_ip_search_patents_by_applicant(
             - applicant_name (str): Name, z.B. 'ABB*', 'ETH Zürich*', 'Roche*'
             - page_size (int): Ergebnisse pro Seite
             - page_token (str): Paginierungs-Token
-            - response_format (str): 'markdown' oder 'json'
 
     Returns:
         str: Ergebnis mit source, total, count, results, next_page_token
@@ -1081,7 +997,7 @@ async def swiss_ip_search_patents_by_applicant(
     try:
         root = await _call_api(xml_body)
         result = _parse_result_page(root)
-        return _render(result, params.response_format)
+        return result
     except Exception as e:
         raise ToolError(_handle_error(e)) from e
 
@@ -1099,7 +1015,7 @@ async def swiss_ip_search_patents_by_applicant(
 @traced_tool
 async def swiss_ip_search_patent_publications(
     params: PatentSearchInput,
-) -> str:
+) -> SearchEnvelope:
     """Durchsucht Schweizer Patentpublikationen (offizielle Veröffentlichungen).
     <use_case>Stand-der-Technik-Recherche ueber Patentpublikationen.</use_case>
     Nützlich für Stand-der-Technik-Recherchen und Innovationsmonitoring.
@@ -1109,7 +1025,6 @@ async def swiss_ip_search_patent_publications(
             - query (str): Suchbegriff
             - page_size (int): Ergebnisse pro Seite
             - page_token (str): Paginierungs-Token
-            - response_format (str): 'markdown' oder 'json'
 
     Returns:
         str: Ergebnis mit source, total, count, results, next_page_token
@@ -1121,7 +1036,7 @@ async def swiss_ip_search_patent_publications(
     try:
         root = await _call_api(xml_body)
         result = _parse_result_page(root)
-        return _render(result, params.response_format)
+        return result
     except Exception as e:
         raise ToolError(_handle_error(e)) from e
 
@@ -1141,7 +1056,7 @@ async def swiss_ip_search_patent_publications(
     },
 )
 @traced_tool
-async def swiss_ip_search_spc(params: SpcSearchInput) -> str:
+async def swiss_ip_search_spc(params: SpcSearchInput) -> SearchEnvelope:
     """Durchsucht Schweizer Ergänzende Schutzzertifikate (ESZ / SPC).
     <use_case>Pharma/Pflanzenschutz: ESZ/SPC recherchieren.</use_case>
     ESZ verlängern den Patentschutz für Arzneimittel und Pflanzenschutzmittel.
@@ -1151,7 +1066,6 @@ async def swiss_ip_search_spc(params: SpcSearchInput) -> str:
             - query (str): Suchbegriff, z.B. 'Novartis', 'ibuprofen*'
             - page_size (int): Ergebnisse pro Seite
             - page_token (str): Paginierungs-Token
-            - response_format (str): 'markdown' oder 'json'
 
     Returns:
         str: Ergebnis mit source, total, count, results (ESZ-Einträge), next_page_token
@@ -1161,7 +1075,7 @@ async def swiss_ip_search_spc(params: SpcSearchInput) -> str:
     try:
         root = await _call_api(xml_body)
         result = _parse_result_page(root)
-        return _render(result, params.response_format)
+        return result
     except Exception as e:
         raise ToolError(_handle_error(e)) from e
 
@@ -1181,7 +1095,7 @@ async def swiss_ip_search_spc(params: SpcSearchInput) -> str:
     },
 )
 @traced_tool
-async def swiss_ip_search_recent_filings(params: DateRangeInput) -> str:
+async def swiss_ip_search_recent_filings(params: DateRangeInput) -> SearchEnvelope:
     """Durchsucht Schweizer IP-Eintragungen innerhalb eines Datumsbereichs.
     <use_case>Zeitraum-/Trendanalyse neuer IP-Eintragungen je Schutzrecht.</use_case>
     <important_notes>date_to ist exklusiv; ip_type aus 4 Werten.</important_notes>
@@ -1194,7 +1108,6 @@ async def swiss_ip_search_recent_filings(params: DateRangeInput) -> str:
             - date_to (str): Enddatum YYYY-MM-DD (exklusive)
             - page_size (int): Ergebnisse pro Seite
             - page_token (str): Paginierungs-Token
-            - response_format (str): 'markdown' oder 'json'
 
     Returns:
         str: Ergebnis mit source, total, count, results, next_page_token, date_range
@@ -1224,12 +1137,12 @@ async def swiss_ip_search_recent_filings(params: DateRangeInput) -> str:
 
         root = await _call_api(xml_body)
         result = _parse_result_page(root)
-        result["date_range"] = {
+        result.date_range = {
             "from": params.date_from,
             "to": params.date_to,
             "ip_type": params.ip_type,
         }
-        return _render(result, params.response_format)
+        return result
     except Exception as e:
         raise ToolError(_handle_error(e)) from e
 
@@ -1245,7 +1158,7 @@ async def swiss_ip_search_recent_filings(params: DateRangeInput) -> str:
     },
 )
 @traced_tool
-async def swiss_ip_get_quota() -> str:
+async def swiss_ip_get_quota() -> QuotaEnvelope:
     """Prüft das verbleibende Datentransfer-Kontingent der IGE Swissreg API.
     <use_case>Betriebsueberwachung: verbleibendes API-Kontingent pruefen.</use_case>
     Die API hat ein monatliches Kontingent. Damit lässt sich die Nutzung überwachen.
@@ -1256,8 +1169,9 @@ async def swiss_ip_get_quota() -> str:
     try:
         root = await _call_api(_quota_request())
         quota_dict = _el_to_dict(root)
-        payload = {"source": DATA_SOURCE, "quota": quota_dict}
-        return json.dumps(payload, ensure_ascii=False, indent=2)
+        if not isinstance(quota_dict, dict):
+            quota_dict = {"value": quota_dict}
+        return QuotaEnvelope(source=_PROVENANCE, quota=quota_dict)
     except Exception as e:
         raise ToolError(_handle_error(e)) from e
 
