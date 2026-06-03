@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "swiss-ip-mcp"
-version = "1.0.0"
+version = "1.1.0"
 description = "MCP server for Swiss intellectual property data (trademarks, patents, SPC) via the IGE/IPI Swissreg API"
 readme = "README.md"
 license = { file = "LICENSE" }
