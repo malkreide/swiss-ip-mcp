@@ -882,6 +882,72 @@ class TestHttpServing:
         assert warnings and warnings[0]["host"] == "0.0.0.0"
 
 
+# ---------------------------------------------------------------------------
+# Unit tests – deployment: health endpoint, stateless flag, infra artifacts
+# (SEC-007 / SCALE-002 / SCALE-003 / SCALE-004 / SCALE-006)
+# ---------------------------------------------------------------------------
+
+import pathlib  # noqa: E402
+
+_REPO_ROOT = pathlib.Path(__file__).resolve().parents[1]
+
+
+class TestDeployment:
+    @pytest.mark.asyncio
+    async def test_health_route_present(self):
+        import swiss_ip_mcp.server as srv
+
+        app = srv._build_http_app("streamable-http")
+        paths = {getattr(r, "path", None) for r in app.router.routes}
+        assert "/health" in paths
+
+    @pytest.mark.asyncio
+    async def test_health_endpoint_returns_ok(self):
+        import swiss_ip_mcp.server as srv
+
+        resp = await srv._health(None)
+        assert resp.status_code == 200
+        assert b'"status":"ok"' in resp.body
+
+    def test_stateless_env_flag(self, monkeypatch):
+        import swiss_ip_mcp.server as srv
+
+        monkeypatch.setenv("MCP_STATELESS_HTTP", "1")
+        assert srv._env_bool("MCP_STATELESS_HTTP") is True
+        monkeypatch.delenv("MCP_STATELESS_HTTP", raising=False)
+        assert srv._env_bool("MCP_STATELESS_HTTP") is False
+
+    def test_dockerfile_is_hardened(self):
+        text = (_REPO_ROOT / "Dockerfile").read_text(encoding="utf-8")
+        assert "USER 10001:10001" in text          # non-root UID >= 10000 (SEC-007)
+        assert "HEALTHCHECK" in text                # SCALE-004
+        assert text.count("FROM ") >= 2             # multi-stage
+        assert "-slim" in text
+
+    def test_compose_has_resource_limits(self):
+        text = (_REPO_ROOT / "docker-compose.yml").read_text(encoding="utf-8")
+        for key in ("mem_limit:", "cpus:", "nofile:", "no-new-privileges", "read_only:"):
+            assert key in text, key
+
+    def test_k8s_security_context(self):
+        text = (_REPO_ROOT / "deploy/kubernetes/deployment.yaml").read_text(encoding="utf-8")
+        for key in (
+            "runAsNonRoot: true",
+            "runAsUser: 10001",
+            "allowPrivilegeEscalation: false",
+            "readOnlyRootFilesystem: true",
+            'drop: ["ALL"]',
+            "RuntimeDefault",
+            "path: /health",
+        ):
+            assert key in text, key
+
+    def test_haproxy_sticky_on_session_header(self):
+        text = (_REPO_ROOT / "deploy/haproxy.cfg").read_text(encoding="utf-8")
+        assert "stick on req.hdr(Mcp-Session-Id)" in text
+        assert "stick-table" in text
+
+
 @pytest.mark.skipif(not LIVE, reason="IGE_USERNAME not set – skipping live tests")
 class TestLiveApi:
     @pytest.mark.asyncio

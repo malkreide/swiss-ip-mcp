@@ -1,0 +1,50 @@
+# Single-node deployment with hardening + resource limits (SEC-007 / SCALE-006).
+# Copy .env.example to .env and fill in IGE credentials before `docker compose up`.
+services:
+  swiss-ip-mcp:
+    build: .
+    image: swiss-ip-mcp:latest
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      IGE_USERNAME: ${IGE_USERNAME:?set IGE_USERNAME in .env}
+      IGE_PASSWORD: ${IGE_PASSWORD:?set IGE_PASSWORD in .env}
+      MCP_TRANSPORT: streamable-http
+      MCP_HOST: 0.0.0.0
+      PORT: "8000"
+      MCP_ALLOWED_ORIGINS: ${MCP_ALLOWED_ORIGINS:-}
+      MCP_ALLOWED_HOSTS: ${MCP_ALLOWED_HOSTS:-}
+      # Stateless HTTP: no per-session affinity needed across replicas.
+      MCP_STATELESS_HTTP: ${MCP_STATELESS_HTTP:-1}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+
+    # --- Resource limits (SCALE-006) ---
+    mem_limit: 512m
+    mem_reservation: 256m
+    cpus: 1.0
+    pids_limit: 256
+    ulimits:
+      nofile:
+        soft: 4096
+        hard: 8192
+
+    # --- Hardening (SEC-007) ---
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/health',timeout=3).status==200 else 1)
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s

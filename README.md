@@ -221,6 +221,20 @@ MCP_TRANSPORT=streamable-http \
 > not place credentialed or non-public tools behind this transport without
 > adding authentication first.
 
+### Docker / Kubernetes
+
+A hardened multi-stage [`Dockerfile`](Dockerfile) (non-root UID 10001,
+`HEALTHCHECK` on `/health`), a [`docker-compose.yml`](docker-compose.yml) with
+resource limits, and Kubernetes manifests + an HAProxy sticky-session config
+under [`deploy/`](deploy/) are included.
+
+```bash
+docker compose up --build   # reads IGE_* from .env
+```
+
+See [`docs/deployment.md`](docs/deployment.md) for hardening, resource limits and
+scaling (stateless vs. sticky-session) details.
+
 ---
 
 ## Tests

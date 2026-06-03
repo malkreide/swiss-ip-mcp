@@ -493,6 +493,10 @@ def _csv_env(name: str) -> list[str]:
     return [v.strip() for v in os.getenv(name, "").split(",") if v.strip()]
 
 
+def _env_bool(name: str) -> bool:
+    return os.getenv(name, "").strip().lower() in ("1", "true", "yes", "on")
+
+
 def _resolve_transport() -> str:
     """Normalise MCP_TRANSPORT to one of: stdio, sse, streamable-http."""
     raw = os.getenv("MCP_TRANSPORT", "stdio").strip().lower()
@@ -541,6 +545,9 @@ mcp = FastMCP(
     host=_env_host(),
     port=_env_port(),
     transport_security=_transport_security(),
+    # Stateless HTTP removes per-session server state, so horizontally scaled
+    # replicas need no session affinity (SCALE-002/003). Opt-in via env.
+    stateless_http=_env_bool("MCP_STATELESS_HTTP"),
 )
 
 # ---------------------------------------------------------------------------
@@ -1322,24 +1329,25 @@ def _in_container() -> bool:
     )
 
 
-def _run_http(transport: str) -> None:
-    """Serve over Streamable HTTP or SSE with CORS configured (SDK-004).
+async def _health(_request):
+    """Liveness/readiness endpoint for container + load-balancer probes."""
+    from starlette.responses import JSONResponse
 
-    Builds the ASGI app from the FastMCP instance and runs it under uvicorn on
-    the configured host/port, so binding is explicit and controllable (SEC-016).
+    return JSONResponse({"status": "ok"})
+
+
+def _build_http_app(transport: str):
+    """Build the Starlette app with a /health route and CORS configured.
+
+    Factored out of `_run_http` so the wiring (health endpoint, CORS) is unit
+    testable without binding a socket.
     """
-    import uvicorn
     from starlette.middleware.cors import CORSMiddleware
 
-    host, port = _env_host(), _env_port()
-    if host == "0.0.0.0" and not _in_container():  # noqa: S104 — intentional, gated
-        logger.warning(
-            "bind_public_without_container",
-            host=host,
-            hint="0.0.0.0 nur hinter Reverse-Proxy / im Container verwenden (SEC-016)",
-        )
-
     app = mcp.sse_app() if transport == "sse" else mcp.streamable_http_app()
+
+    # Health check for HEALTHCHECK / k8s probes / LB backend health (SCALE-002).
+    app.add_route("/health", _health, methods=["GET"])
 
     # CORS: explicit origin allow-list (no wildcard in production), and the
     # Mcp-Session-Id header must be both accepted and exposed so browser
@@ -1353,8 +1361,33 @@ def _run_http(transport: str) -> None:
         allow_headers=["Content-Type", "Authorization", "Mcp-Session-Id", "Last-Event-ID"],
         expose_headers=["Mcp-Session-Id"],
     )
+    return app
 
-    logger.info("http_server_start", transport=transport, host=host, port=port)
+
+def _run_http(transport: str) -> None:
+    """Serve over Streamable HTTP or SSE with CORS configured (SDK-004).
+
+    Builds the ASGI app from the FastMCP instance and runs it under uvicorn on
+    the configured host/port, so binding is explicit and controllable (SEC-016).
+    """
+    import uvicorn
+
+    host, port = _env_host(), _env_port()
+    if host == "0.0.0.0" and not _in_container():  # noqa: S104 — intentional, gated
+        logger.warning(
+            "bind_public_without_container",
+            host=host,
+            hint="0.0.0.0 nur hinter Reverse-Proxy / im Container verwenden (SEC-016)",
+        )
+
+    app = _build_http_app(transport)
+    logger.info(
+        "http_server_start",
+        transport=transport,
+        host=host,
+        port=port,
+        stateless=_env_bool("MCP_STATELESS_HTTP"),
+    )
     uvicorn.run(app, host=host, port=port, log_level="info")
 
 
