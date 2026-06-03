@@ -6,6 +6,14 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ## [Unreleased]
 
 ### Added
+- **Repo hygiene** (ARCH-012): a `.github/dependabot.yml` keeps the `mcp` /
+  `fastmcp` SDK and GitHub Actions current via monthly PRs; READMEs gained an
+  "MCP Protocol Version" section documenting the negotiated version and the SDK
+  update policy.
+
+### Fixed
+- Consolidated the duplicate `[1.0.0]` CHANGELOG entries (which carried two
+  conflicting dates) into a single coherent release section.
 - **Structured logging** (OBS-003): logs are now emitted as JSON on stderr via
   `structlog` (stdout stays clean for the stdio protocol). Each tool call binds
   a `tool` name and `correlation_id`; four severity levels are used. Level is
@@ -65,9 +73,8 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   serves only public IP-register data.
 
 ## [1.0.0] - 2026-03-29
-v1.0.0 — Initial Release
 
-## [1.0.0] – 2026-03-08
+Initial release.
 
 ### Added
 - **Trademarks**: `swiss_ip_search_trademarks`, `swiss_ip_get_trademark`,

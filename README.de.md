@@ -239,6 +239,14 @@ wird über `LOG_LEVEL` gesetzt (`DEBUG` / `INFO` / `WARNING` / `ERROR`, Standard
 
 ---
 
+## MCP-Protokollversion
+
+Die MCP-Protokollversion stammt aus dem gepinnten [MCP Python SDK](https://github.com/modelcontextprotocol/python-sdk) (`mcp`, via `fastmcp`) und wird gemäss Spezifikation beim `initialize` ausgehandelt — der Server einigt sich auf die höchste von beiden Seiten unterstützte Version. Mit dem aktuell gepinnten SDK ist die höchste unterstützte Version **`2025-11-25`** (ältere Clients handeln automatisch herunter). Dieser Wert folgt dem SDK und ist hier nicht fest verdrahtet.
+
+**Update-Policy:** Die SDK-Untergrenze ist in `pyproject.toml` gepinnt; [Dependabot](.github/dependabot.yml) öffnet monatlich PRs für `mcp`-/`fastmcp`-Updates. Protokoll- oder SDK-Sprünge mit Verhaltensänderung werden in diesen PRs geprüft und in [`CHANGELOG.md`](CHANGELOG.md) dokumentiert.
+
+---
+
 ## Datenquelle
 
 Alle Daten stammen aus der [IGE/IPI Swissreg Datadelivery API](https://www.swissreg.ch/public/apidocs/). Die API ist nach Unterzeichnung der Nutzungsbedingungen kostenlos, unterliegt aber einem monatlichen Datentransfer-Kontingent. Das verbleibende Kontingent lässt sich jederzeit mit dem Tool `swiss_ip_get_quota` prüfen.
