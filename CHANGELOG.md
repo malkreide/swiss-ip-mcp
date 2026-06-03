@@ -5,6 +5,11 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [1.1.1] - 2026-06-03
+
+Closes the last three (non-blocking) audit partials. Confirming re-audit
+`2026-06-03T062701-Z-swiss-ip-mcp`: **44 pass / 0 partial / 0 fail**.
+
 ### Added
 - **Progress reporting** (SDK-003): tools accept an injected `ctx: Context` and
   report progress around the (up to 60s) Swissreg API call via
