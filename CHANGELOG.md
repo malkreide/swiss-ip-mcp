@@ -5,6 +5,12 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-06-03
+
+Audit-hardening release. Closes every blocking finding from the mcp-audit-skill
+audit (re-audit run `2026-06-03T055425-Z-swiss-ip-mcp`: 41 pass / 3 partial /
+0 fail — production-ready).
+
 ### Added
 - **Egress allow-list** (SEC-021): an immutable `ALLOWED_EGRESS_HOSTS` frozenset
   is enforced by `_assert_host_allowed()` before every outgoing request —
