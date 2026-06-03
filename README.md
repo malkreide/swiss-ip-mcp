@@ -234,6 +234,17 @@ MCP_OTEL_ENABLED=1 \
 Tool spans carry only `mcp.tool.name` and `mcp.tool.result.is_error` — **no
 query arguments, credentials or response bodies** are recorded.
 
+### Logging
+
+The server logs structured JSON to **stderr** (stdout is reserved for the
+stdio protocol). Every tool call binds a `tool` name and a `correlation_id`, so
+all log lines for one call are correlated. Set the level with `LOG_LEVEL`
+(`DEBUG` / `INFO` / `WARNING` / `ERROR`, default `INFO`):
+
+```json
+{"event": "tool.call.start", "tool": "swiss_ip_search_trademarks", "correlation_id": "da55…", "level": "info", "timestamp": "…Z"}
+```
+
 ---
 
 ## Data Source

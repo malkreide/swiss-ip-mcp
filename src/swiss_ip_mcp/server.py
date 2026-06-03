@@ -13,7 +13,6 @@ Transport:      stdio (default, e.g. Claude Desktop) and Streamable HTTP / SSE
 from __future__ import annotations
 
 import json
-import logging
 import os
 import time
 import xml.etree.ElementTree as ET
@@ -28,13 +27,14 @@ from mcp.server.fastmcp import FastMCP
 from mcp.server.transport_security import TransportSecuritySettings
 from pydantic import BaseModel, ConfigDict, Field
 
+from swiss_ip_mcp.logging_config import get_logger, setup_logging
 from swiss_ip_mcp.telemetry import mark_error, setup_telemetry, traced_tool
 
 # ---------------------------------------------------------------------------
-# Logging
+# Logging (structured JSON on stderr — OBS-003)
 # ---------------------------------------------------------------------------
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger("swiss_ip_mcp")
+setup_logging()
+logger = get_logger("swiss_ip_mcp")
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -100,14 +100,14 @@ async def _lifespan(_server: FastMCP) -> AsyncIterator[dict]:
     transport-dependent setup branch (ARCH-004).
     """
     client = _get_client()
-    logger.info("swiss_ip_mcp lifespan up — pooled HTTP client ready")
+    logger.info("lifespan_started")
     try:
         yield {"client": client}
     finally:
         global _client
         await client.aclose()
         _client = None
-        logger.info("swiss_ip_mcp lifespan down — HTTP client closed")
+        logger.info("lifespan_stopped")
 
 
 async def _get_token(client: httpx.AsyncClient) -> str:
@@ -144,7 +144,7 @@ async def _get_token(client: httpx.AsyncClient) -> str:
     expires_in = int(data.get("expires_in", 300))
     _token_cache["token"] = token
     _token_cache["expires_at"] = now + expires_in
-    logger.info("IGE token refreshed, valid for %ds", expires_in)
+    logger.info("ige_token_refreshed", valid_for_s=expires_in)
     return token
 
 
@@ -152,6 +152,7 @@ async def _call_api(xml_body: str) -> ET.Element:
     """Post an XML request to the Swissreg API and return the root element."""
     client = _get_client()
     token = await _get_token(client)
+    logger.debug("swissreg_api_request", bytes=len(xml_body))
     resp = await client.post(
         API_ENDPOINT,
         content=xml_body.encode("utf-8"),
@@ -362,13 +363,14 @@ def _handle_error(e: Exception) -> str:
     reprs — is logged server-side only. The returned string never carries
     internals (stack traces, raw API bodies) to the client / LLM.
     """
-    logger.warning("Tool error: %r", e, exc_info=True)
     if isinstance(e, ValueError):
         # Raised by our own config check with a deliberate, safe help text
         # (missing IGE credentials) — no internals, keep it verbatim.
+        logger.warning("config_error")
         return f"Konfigurationsfehler: {e}"
     if isinstance(e, httpx.HTTPStatusError):
         status = e.response.status_code
+        logger.warning("api_http_error", status=status, exc_info=True)
         if status == 401:
             return (
                 "Fehler 401: Authentifizierung fehlgeschlagen. "
@@ -389,7 +391,9 @@ def _handle_error(e: Exception) -> str:
             "fehlgeschlagen. Details stehen im Server-Log."
         )
     if isinstance(e, httpx.TimeoutException):
+        logger.warning("api_timeout")
         return "Fehler: Anfrage hat das Timeout überschritten. Bitte erneut versuchen."
+    logger.error("unexpected_error", error_type=type(e).__name__, exc_info=True)
     return (
         "Unerwarteter Fehler bei der Verarbeitung der Anfrage. "
         "Details stehen im Server-Log."
@@ -1251,9 +1255,9 @@ def _run_http(transport: str) -> None:
     host, port = _env_host(), _env_port()
     if host == "0.0.0.0" and not _in_container():  # noqa: S104 — intentional, gated
         logger.warning(
-            "Binding auf 0.0.0.0 ohne erkannte Container-Umgebung. Im lokalen "
-            "Betrieb 127.0.0.1 verwenden; 0.0.0.0 nur hinter einem Reverse-Proxy "
-            "/ in einem Container (SEC-016)."
+            "bind_public_without_container",
+            host=host,
+            hint="0.0.0.0 nur hinter Reverse-Proxy / im Container verwenden (SEC-016)",
         )
 
     app = mcp.sse_app() if transport == "sse" else mcp.streamable_http_app()
@@ -1271,7 +1275,7 @@ def _run_http(transport: str) -> None:
         expose_headers=["Mcp-Session-Id"],
     )
 
-    logger.info("swiss_ip_mcp starting via %s on %s:%d", transport, host, port)
+    logger.info("http_server_start", transport=transport, host=host, port=port)
     uvicorn.run(app, host=host, port=port, log_level="info")
 
 
