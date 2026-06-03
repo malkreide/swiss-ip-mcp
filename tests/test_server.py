@@ -383,6 +383,91 @@ class TestInputValidation:
 # ---------------------------------------------------------------------------
 
 # ---------------------------------------------------------------------------
+# Unit tests – OpenTelemetry tracing (OBS-006)
+# ---------------------------------------------------------------------------
+
+class TestTelemetry:
+    def test_disabled_by_default(self, monkeypatch):
+        from swiss_ip_mcp import telemetry
+
+        monkeypatch.delenv("MCP_OTEL_ENABLED", raising=False)
+        monkeypatch.delenv("OTEL_EXPORTER_OTLP_ENDPOINT", raising=False)
+        assert telemetry.telemetry_enabled() is False
+        assert telemetry.setup_telemetry() is False
+
+    def test_enabled_via_flag_and_endpoint(self, monkeypatch):
+        from swiss_ip_mcp import telemetry
+
+        monkeypatch.setenv("MCP_OTEL_ENABLED", "1")
+        assert telemetry.telemetry_enabled() is True
+        monkeypatch.delenv("MCP_OTEL_ENABLED", raising=False)
+        monkeypatch.setenv("OTEL_EXPORTER_OTLP_ENDPOINT", "http://collector:4318")
+        assert telemetry.telemetry_enabled() is True
+
+    def _capture(self):
+        """Bind the telemetry tracer to an in-memory exporter; return it."""
+        from opentelemetry.sdk.trace import TracerProvider
+        from opentelemetry.sdk.trace.export import SimpleSpanProcessor
+        from opentelemetry.sdk.trace.export.in_memory_span_exporter import (
+            InMemorySpanExporter,
+        )
+
+        from swiss_ip_mcp import telemetry
+
+        exporter = InMemorySpanExporter()
+        provider = TracerProvider()
+        provider.add_span_processor(SimpleSpanProcessor(exporter))
+        telemetry.tracer = provider.get_tracer("test")  # bypass global provider
+        return exporter
+
+    @pytest.mark.asyncio
+    async def test_tool_call_emits_span_no_pii(self):
+        from swiss_ip_mcp import telemetry
+
+        original = telemetry.tracer
+        exporter = self._capture()
+        try:
+            root = _make_root(SAMPLE_TM_XML)
+            with patch("swiss_ip_mcp.server._call_api", new=AsyncMock(return_value=root)):
+                from swiss_ip_mcp.server import TrademarkSearchInput
+                await swiss_ip_search_trademarks(
+                    TrademarkSearchInput(query="SECRET-QUERY")
+                )
+        finally:
+            telemetry.tracer = original
+
+        spans = {s.name: s for s in exporter.get_finished_spans()}
+        span = spans["mcp.tool/swiss_ip_search_trademarks"]
+        assert span.attributes["mcp.tool.name"] == "swiss_ip_search_trademarks"
+        assert span.attributes["mcp.tool.result.is_error"] is False
+        # No query content leaks into span attributes (no PII).
+        assert "SECRET-QUERY" not in str(dict(span.attributes))
+
+    @pytest.mark.asyncio
+    async def test_error_sets_is_error_attribute(self):
+        import httpx
+
+        from swiss_ip_mcp import telemetry
+
+        original = telemetry.tracer
+        exporter = self._capture()
+        try:
+            err = httpx.HTTPStatusError(
+                "500", request=MagicMock(), response=MagicMock(status_code=500)
+            )
+            with patch("swiss_ip_mcp.server._call_api", new=AsyncMock(side_effect=err)):
+                from swiss_ip_mcp.server import TrademarkSearchInput
+                await swiss_ip_search_trademarks(TrademarkSearchInput(query="x"))
+        finally:
+            telemetry.tracer = original
+
+        span = {s.name: s for s in exporter.get_finished_spans()}[
+            "mcp.tool/swiss_ip_search_trademarks"
+        ]
+        assert span.attributes["mcp.tool.result.is_error"] is True
+
+
+# ---------------------------------------------------------------------------
 # Unit tests – response_format rendering (SDK-003)
 # ---------------------------------------------------------------------------
 

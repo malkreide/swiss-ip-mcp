@@ -200,6 +200,33 @@ Der CI-Workflow läuft auf Python 3.11, 3.12 und 3.13.
 
 ---
 
+## Observability (optional)
+
+Der Server kann OpenTelemetry-Traces senden — ein Span pro Tool-Call plus
+Child-Spans für die Backend-Aufrufe an Swissreg/IDP. Tracing ist **standardmässig
+deaktiviert** und erzeugt ohne Aktivierung keinen Overhead.
+
+```bash
+pip install 'swiss-ip-mcp[otel]'
+
+MCP_OTEL_ENABLED=1 \
+  OTEL_EXPORTER_OTLP_ENDPOINT=http://dein-collector:4318 \
+  MCP_ENV=production \
+  swiss-ip-mcp
+```
+
+| Variable | Zweck |
+|----------|-------|
+| `MCP_OTEL_ENABLED` | `1` aktiviert den Trace-Export (oder einfach den Endpunkt unten setzen). |
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | OTLP/HTTP-Collector-Endpunkt (Standard-OTEL-Variable). |
+| `MCP_ENV` | Wert für das Resource-Attribut `deployment.environment` (Standard `production`). |
+
+Tool-Spans enthalten ausschliesslich `mcp.tool.name` und
+`mcp.tool.result.is_error` — **keine Suchargumente, Credentials oder
+Antwort-Bodies**.
+
+---
+
 ## Sicherheit & Grenzen
 
 - **Nur-Lesen:** Alle Tools führen authentifizierte POST-Anfragen an die Swissreg API durch — es werden keine Daten geschrieben, verändert oder gelöscht.

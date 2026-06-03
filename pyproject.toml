@@ -25,14 +25,23 @@ dependencies = [
     # Imported directly by the HTTP/SSE transport (MCP_TRANSPORT=sse|streamable-http).
     "starlette>=0.40.0",
     "uvicorn>=0.30.0",
+    # Tracing API only — no-op without a provider; SDK/exporter live in the [otel] extra.
+    "opentelemetry-api>=1.20.0",
 ]
 
 [project.optional-dependencies]
+# Enable OpenTelemetry export (OBS-006). Activate at runtime with MCP_OTEL_ENABLED=1.
+otel = [
+    "opentelemetry-sdk>=1.20.0",
+    "opentelemetry-exporter-otlp-proto-http>=1.20.0",
+    "opentelemetry-instrumentation-httpx>=0.40b0",
+]
 dev = [
     "ruff>=0.4.0",
     "pytest>=8.0.0",
     "pytest-asyncio>=0.23.0",
     "respx>=0.21.0",
+    "opentelemetry-sdk>=1.20.0",
 ]
 
 [project.scripts]
