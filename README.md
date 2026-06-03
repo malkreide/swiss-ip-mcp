@@ -248,7 +248,7 @@ All data is provided by the [IGE/IPI Swissreg Datadelivery API](https://www.swis
 
 **Provenance:** every tool response carries a `source` block (provider, source
 URL, license) so downstream consumers retain attribution. The result envelope is
-`{ source, total, count, results, next_page_token }`.
+`{ source, total, count, match_type, results, next_page_token }`.
 
 ---
 

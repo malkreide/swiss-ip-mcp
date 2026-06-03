@@ -336,13 +336,23 @@ def _parse_result_page(root: ET.Element) -> dict:
             total = _text(total_el)
         break
 
-    return {
+    count = len(items)
+    envelope: dict = {
         "source": DATA_SOURCE,
         "total": total,
-        "count": len(items),
+        "count": count,
+        # ARCH-003: signal whether the search matched, so the LLM can react
+        # instead of reading a bare empty list. Number lookups override this.
+        "match_type": "exact" if count else "none",
         "results": items,
         "next_page_token": next_token,
     }
+    if count == 0:
+        envelope["suggestion"] = (
+            "Keine Treffer. Suchbegriff mit Wildcard (*) erweitern, die "
+            "Schreibweise prüfen oder den Begriff verkürzen."
+        )
+    return envelope
 
 
 def _handle_error(e: Exception) -> str:
@@ -751,6 +761,7 @@ class SpcSearchInput(BaseModel):
 @traced_tool
 async def swiss_ip_search_trademarks(params: TrademarkSearchInput) -> str:
     """Durchsucht das Schweizer Markenregister nach Freitext.
+    <use_case>Markenrecherche / Brand-Monitoring per Name, Wort oder Stichwort.</use_case>
     Findet Marken nach Name, Markenbegriff oder Stichwort. Wildcards (*) möglich.
 
     Args:
@@ -792,6 +803,7 @@ async def swiss_ip_search_trademarks_by_owner(
     params: TrademarkOwnerSearchInput,
 ) -> str:
     """Durchsucht Schweizer Marken gefiltert nach Inhaber / Anmelder.
+    <use_case>Portfolio-Analyse: alle Marken eines Inhabers/Anmelders finden.</use_case>
     Nützlich für IP-Monitoring: alle Marken eines Unternehmens oder einer Person finden.
 
     Args:
@@ -831,6 +843,8 @@ async def swiss_ip_search_trademarks_by_owner(
 @traced_tool
 async def swiss_ip_get_trademark(params: TrademarkNumberInput) -> str:
     """Ruft eine bestimmte Schweizer Marke anhand der Anmelde-/Registernummer ab.
+    <use_case>Detail-Abruf einer Marke per Anmelde-/Registernummer.</use_case>
+    <important_notes>Exakter Lookup; bei unbekannter Nummer match_type="none".</important_notes>
     Gibt detaillierten Datensatz inkl. Status, Waren-/Dienstleistungsklassen und Registrierungshistorie zurück.
 
     Args:
@@ -848,6 +862,7 @@ async def swiss_ip_get_trademark(params: TrademarkNumberInput) -> str:
         result = _parse_result_page(root)
         if result["count"] == 0:
             return _render({
+                "match_type": "none",
                 "error": f"Marke '{params.trademark_number}' nicht gefunden. "
                          "Bitte Nummernformat prüfen (z.B. 'P-756123')."
             }, params.response_format)
@@ -871,6 +886,7 @@ async def swiss_ip_search_trademarks_by_class(
     params: TrademarkClassInput,
 ) -> str:
     """Durchsucht Schweizer Marken nach Nizza-Klassifikation.
+    <use_case>Branchenanalyse: Marken einer Nizza-Klasse (1-45) finden.</use_case>
     Nützlich für Wettbewerbsanalysen innerhalb einer Branche.
 
     Args:
@@ -923,6 +939,7 @@ async def swiss_ip_search_trademarks_by_class(
 @traced_tool
 async def swiss_ip_search_patents(params: PatentSearchInput) -> str:
     """Durchsucht das Schweizer Patentregister nach Freitext.
+    <use_case>Technologie-/Innovationsrecherche in Schweizer Patenten.</use_case>
     Gibt CH-Patenteinträge inkl. Titel, Anmelder, IPC-Klassifikation, Daten und Rechtsstatus zurück.
 
     Args:
@@ -962,6 +979,8 @@ async def swiss_ip_search_patents(params: PatentSearchInput) -> str:
 @traced_tool
 async def swiss_ip_get_patent(params: PatentNumberInput) -> str:
     """Ruft ein bestimmtes Schweizer Patent anhand seiner Nummer ab.
+    <use_case>Detail-Abruf eines Patents per Nummer.</use_case>
+    <important_notes>Exakter Lookup; kein Fuzzy-Match.</important_notes>
     Gibt vollständigen Datensatz inkl. IPC-Codes, Anmelder, Erfinder und Status zurück.
 
     Args:
@@ -979,6 +998,7 @@ async def swiss_ip_get_patent(params: PatentNumberInput) -> str:
         result = _parse_result_page(root)
         if result["count"] == 0:
             return _render({
+                "match_type": "none",
                 "error": (
                     f"Patent '{params.patent_number}' nicht gefunden. "
                     "Bitte Format prüfen (z.B. 'CH700123' oder '700123')."
@@ -1004,6 +1024,7 @@ async def swiss_ip_search_patents_by_applicant(
     params: PatentApplicantInput,
 ) -> str:
     """Durchsucht Schweizer Patente nach Anmelder oder Erfinder.
+    <use_case>Innovationsmonitoring: Patente eines Anmelders/Erfinders.</use_case>
     Nützlich für Wettbewerbsanalyse und Innovationsmonitoring.
 
     Args:
@@ -1043,6 +1064,7 @@ async def swiss_ip_search_patent_publications(
     params: PatentSearchInput,
 ) -> str:
     """Durchsucht Schweizer Patentpublikationen (offizielle Veröffentlichungen).
+    <use_case>Stand-der-Technik-Recherche ueber Patentpublikationen.</use_case>
     Nützlich für Stand-der-Technik-Recherchen und Innovationsmonitoring.
 
     Args:
@@ -1084,6 +1106,7 @@ async def swiss_ip_search_patent_publications(
 @traced_tool
 async def swiss_ip_search_spc(params: SpcSearchInput) -> str:
     """Durchsucht Schweizer Ergänzende Schutzzertifikate (ESZ / SPC).
+    <use_case>Pharma/Pflanzenschutz: ESZ/SPC recherchieren.</use_case>
     ESZ verlängern den Patentschutz für Arzneimittel und Pflanzenschutzmittel.
 
     Args:
@@ -1123,6 +1146,8 @@ async def swiss_ip_search_spc(params: SpcSearchInput) -> str:
 @traced_tool
 async def swiss_ip_search_recent_filings(params: DateRangeInput) -> str:
     """Durchsucht Schweizer IP-Eintragungen innerhalb eines Datumsbereichs.
+    <use_case>Zeitraum-/Trendanalyse neuer IP-Eintragungen je Schutzrecht.</use_case>
+    <important_notes>date_to ist exklusiv; ip_type aus 4 Werten.</important_notes>
     Unterstützt Marken, Patente, Patentpublikationen und ESZ.
 
     Args:
@@ -1185,6 +1210,7 @@ async def swiss_ip_search_recent_filings(params: DateRangeInput) -> str:
 @traced_tool
 async def swiss_ip_get_quota() -> str:
     """Prüft das verbleibende Datentransfer-Kontingent der IGE Swissreg API.
+    <use_case>Betriebsueberwachung: verbleibendes API-Kontingent pruefen.</use_case>
     Die API hat ein monatliches Kontingent. Damit lässt sich die Nutzung überwachen.
 
     Returns:

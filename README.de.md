@@ -237,7 +237,7 @@ Alle Daten stammen aus der [IGE/IPI Swissreg Datadelivery API](https://www.swiss
 | Quelle | Swissreg Datadelivery API — <https://www.swissreg.ch/public/apidocs/> |
 | Lizenz / Bedingungen | [IGE/IPI Swissreg Datadelivery API Terms of Use](https://www.ige.ch/de/uebersicht-dienstleistungen/digitales-angebot/ip-daten/datenabgabe-api) |
 
-**Provenance:** Jede Tool-Antwort enthält einen `source`-Block (Anbieter, Quell-URL, Lizenz), damit die Attribution erhalten bleibt. Das Ergebnis-Envelope ist `{ source, total, count, results, next_page_token }`.
+**Provenance:** Jede Tool-Antwort enthält einen `source`-Block (Anbieter, Quell-URL, Lizenz), damit die Attribution erhalten bleibt. Das Ergebnis-Envelope ist `{ source, total, count, match_type, results, next_page_token }`.
 
 ---
 

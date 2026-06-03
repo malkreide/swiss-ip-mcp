@@ -175,6 +175,18 @@ class TestErrorHandler:
 # Unit tests – tools (mocked API)
 # ---------------------------------------------------------------------------
 
+class TestToolDescriptions:
+    @pytest.mark.asyncio
+    async def test_all_tools_have_use_case_tag(self):
+        # ARCH-002: every tool description carries a <use_case> tag.
+        from swiss_ip_mcp.server import mcp
+
+        tools = await mcp.list_tools()
+        assert len(tools) == 11
+        missing = [t.name for t in tools if "<use_case>" not in (t.description or "")]
+        assert not missing, f"tools missing <use_case>: {missing}"
+
+
 class TestProvenance:
     @pytest.mark.asyncio
     async def test_search_envelope_has_source_and_results(self):
@@ -189,6 +201,30 @@ class TestProvenance:
         assert "license" in result["source"]
         assert isinstance(result["results"], list)
         assert result["count"] == len(result["results"])
+
+    @pytest.mark.asyncio
+    async def test_match_type_exact_on_hits(self):
+        root = _make_root(SAMPLE_TM_XML)
+        with patch("swiss_ip_mcp.server._call_api", new=AsyncMock(return_value=root)):
+            from swiss_ip_mcp.server import TrademarkSearchInput
+            result = json.loads(
+                await swiss_ip_search_trademarks(TrademarkSearchInput(query="x"))
+            )
+        assert result["match_type"] == "exact"
+        assert "suggestion" not in result
+
+    @pytest.mark.asyncio
+    async def test_match_type_none_with_suggestion_on_empty(self):
+        # ARCH-003: empty search yields match_type=none + actionable suggestion.
+        root = _make_root(SAMPLE_EMPTY_XML)
+        with patch("swiss_ip_mcp.server._call_api", new=AsyncMock(return_value=root)):
+            from swiss_ip_mcp.server import PatentSearchInput
+            result = json.loads(
+                await swiss_ip_search_patents(PatentSearchInput(query="zzzznomatch"))
+            )
+        assert result["match_type"] == "none"
+        assert result["count"] == 0
+        assert "Wildcard" in result["suggestion"]
 
     @pytest.mark.asyncio
     async def test_quota_has_source(self):
