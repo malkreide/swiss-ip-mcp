@@ -6,6 +6,17 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ## [Unreleased]
 
 ### Added
+- **MCP Resources & Prompts** (ARCH-008): the server now exposes all three MCP
+  primitives. Resources `swissip://about` and `swissip://domains` provide
+  read-only metadata; prompts `trademark_availability`, `competitor_ip_report`
+  and `recent_ip_filings_report` offer curated workflow templates.
+
+### Changed
+- **Error semantics** (OBS-001): tool execution errors (API failures, timeouts,
+  missing credentials) are now raised, so clients receive MCP `isError: true`
+  with a masked message instead of a normal result containing an `error` key. A
+  number lookup with no match is no longer reported as an error — it returns a
+  normal result with `match_type: "none"` and a `message` field.
 - **Repo hygiene** (ARCH-012): a `.github/dependabot.yml` keeps the `mcp` /
   `fastmcp` SDK and GitHub Actions current via monthly PRs; READMEs gained an
   "MCP Protocol Version" section documenting the negotiated version and the SDK

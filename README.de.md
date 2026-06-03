@@ -67,6 +67,33 @@ Die eigentliche Stärke liegt in der Sprachsteuerung. Statt manuell im Register 
 | `swiss_ip_search_recent_filings` | Eintragungen nach Datumsbereich filtern (alle Domänen) |
 | `swiss_ip_get_quota` | Verbleibendes API-Datenkontingent prüfen |
 
+### Resources & Prompts
+
+Neben Tools stellt der Server zwei weitere MCP-Primitive bereit:
+
+**Resources** (read-only Metadaten, URI-Schema `swissip://`):
+
+| URI | Inhalt |
+|-----|--------|
+| `swissip://about` | Server- + Datenquellen-Metadaten (Provenance, Domänen) |
+| `swissip://domains` | Liste der abgedeckten IP-Domänen |
+
+**Prompts** (kuratierte Workflow-Vorlagen):
+
+| Prompt | Argumente | Zweck |
+|--------|-----------|-------|
+| `trademark_availability` | `name` | Prüfen, ob ein Name als CH-Marke registriert ist |
+| `competitor_ip_report` | `company` | IP-Überblick (Marken + Patente) zu einem Unternehmen |
+| `recent_ip_filings_report` | `ip_type, date_from, date_to` | Report zu neuen Eintragungen in einem Zeitraum |
+
+### Fehler-Semantik
+
+Tool-**Ausführungsfehler** (API-Fehler, Timeouts, fehlende Credentials) werden mit
+MCP `isError: true` und einer maskierten, verständlichen Meldung zurückgegeben —
+interne Details (Stacktraces, rohe API-Bodies) gehen nur ins Server-Log. Ein
+Nummern-Lookup ohne Treffer ist **kein** Fehler: er liefert ein normales Ergebnis
+mit `match_type: "none"` und einer `message`.
+
 ---
 
 ## Architektur
