@@ -227,6 +227,20 @@ Antwort-Bodies**.
 
 ---
 
+## Datenquelle
+
+Alle Daten stammen aus der [IGE/IPI Swissreg Datadelivery API](https://www.swissreg.ch/public/apidocs/). Die API ist nach Unterzeichnung der Nutzungsbedingungen kostenlos, unterliegt aber einem monatlichen Datentransfer-Kontingent. Das verbleibende Kontingent lässt sich jederzeit mit dem Tool `swiss_ip_get_quota` prüfen.
+
+| Feld | Wert |
+|------|------|
+| Anbieter | Eidgenössisches Institut für Geistiges Eigentum (IGE/IPI) |
+| Quelle | Swissreg Datadelivery API — <https://www.swissreg.ch/public/apidocs/> |
+| Lizenz / Bedingungen | [IGE/IPI Swissreg Datadelivery API Terms of Use](https://www.ige.ch/de/uebersicht-dienstleistungen/digitales-angebot/ip-daten/datenabgabe-api) |
+
+**Provenance:** Jede Tool-Antwort enthält einen `source`-Block (Anbieter, Quell-URL, Lizenz), damit die Attribution erhalten bleibt. Das Ergebnis-Envelope ist `{ source, total, count, results, next_page_token }`.
+
+---
+
 ## Sicherheit & Grenzen
 
 - **Nur-Lesen:** Alle Tools führen authentifizierte POST-Anfragen an die Swissreg API durch — es werden keine Daten geschrieben, verändert oder gelöscht.

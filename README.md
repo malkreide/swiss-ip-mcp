@@ -240,6 +240,16 @@ query arguments, credentials or response bodies** are recorded.
 
 All data is provided by the [IGE/IPI Swissreg Datadelivery API](https://www.swissreg.ch/public/apidocs/). The API is free after signing the usage terms, subject to a monthly data transfer quota. Check your remaining quota at any time using the `swiss_ip_get_quota` tool.
 
+| Field | Value |
+|-------|-------|
+| Provider | Swiss Federal Institute of Intellectual Property (IGE/IPI) |
+| Source | Swissreg Datadelivery API — <https://www.swissreg.ch/public/apidocs/> |
+| License / terms | [IGE/IPI Swissreg Datadelivery API Terms of Use](https://www.ige.ch/en/services/digital-resources/ip-data/data-delivery-api) |
+
+**Provenance:** every tool response carries a `source` block (provider, source
+URL, license) so downstream consumers retain attribution. The result envelope is
+`{ source, total, count, results, next_page_token }`.
+
 ---
 
 ## Safety & Limits

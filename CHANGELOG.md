@@ -6,6 +6,11 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ## [Unreleased]
 
 ### Added
+- **Response provenance + envelope** (CH-004 / SDK-002): every tool response now
+  carries a `source` block (provider, source URL, license). Search/list tools
+  use a consistent envelope `{ source, total, count, results, next_page_token }`
+  and `swiss_ip_get_quota` returns `{ source, quota }`. README documents the data
+  license explicitly.
 - **Optional OpenTelemetry tracing** (`MCP_OTEL_ENABLED=1`, install
   `swiss-ip-mcp[otel]`): one span per tool call (`mcp.tool.name`,
   `mcp.tool.result.is_error`) plus httpx auto-instrumented child spans for
@@ -26,6 +31,9 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - `.env.example` with placeholders for credentials and transport configuration.
 
 ### Changed
+- **Response field rename:** the search/list result array is now `results`
+  (was `items`), and responses gained a top-level `source` block. Consumers
+  reading `items` must switch to `results`.
 - `_call_api` uses the shared pooled HTTP client instead of opening a new
   `httpx.AsyncClient` on every call.
 - README / README.de transport sections updated to match the implementation,
