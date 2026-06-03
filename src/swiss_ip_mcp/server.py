@@ -21,6 +21,7 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from enum import StrEnum
 from typing import Optional
+from urllib.parse import urlparse
 
 import httpx
 from mcp.server.fastmcp import FastMCP
@@ -54,6 +55,19 @@ NS_SPC = "urn:ige:schema:xsd:datadeliveryspc-1.0.0"
 
 DEFAULT_PAGE_SIZE = 10
 REQUEST_TIMEOUT = 60.0
+
+# Egress allow-list (SEC-021): the server only ever talks to these fixed IGE
+# hosts. Enforced before every outgoing request as defense-in-depth — a
+# code-layer guard against accidental or malicious egress to other hosts.
+# Immutable on purpose (frozenset, not runtime-configurable).
+ALLOWED_EGRESS_HOSTS = frozenset({"idp.ipi.ch", "www.swissreg.ch"})
+
+
+def _assert_host_allowed(url: str) -> None:
+    """Raise if `url`'s host is not on the egress allow-list (SEC-021)."""
+    host = (urlparse(url).hostname or "").lower()
+    if host not in ALLOWED_EGRESS_HOSTS:
+        raise ValueError(f"Egress zu nicht erlaubtem Host blockiert: {host!r}")
 
 # Provenance attached to every tool response (CH-004 / SDK-002). All data is
 # served by the IGE/IPI Swissreg Datadelivery API under its terms of use.
@@ -129,6 +143,7 @@ async def _get_token(client: httpx.AsyncClient) -> str:
     if _token_cache["token"] and now < _token_cache["expires_at"] - 30:
         return _token_cache["token"]  # type: ignore[return-value]
 
+    _assert_host_allowed(IDP_TOKEN_URL)
     resp = await client.post(
         IDP_TOKEN_URL,
         data={
@@ -154,6 +169,7 @@ async def _call_api(xml_body: str) -> ET.Element:
     client = _get_client()
     token = await _get_token(client)
     logger.debug("swissreg_api_request", bytes=len(xml_body))
+    _assert_host_allowed(API_ENDPOINT)
     resp = await client.post(
         API_ENDPOINT,
         content=xml_body.encode("utf-8"),

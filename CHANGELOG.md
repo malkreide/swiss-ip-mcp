@@ -6,6 +6,16 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ## [Unreleased]
 
 ### Added
+- **Egress allow-list** (SEC-021): an immutable `ALLOWED_EGRESS_HOSTS` frozenset
+  is enforced by `_assert_host_allowed()` before every outgoing request —
+  defense-in-depth against egress to any host other than the fixed IGE endpoints.
+- **Tool-definition pinning** (SEC-022): `tool_manifest.json` pins a SHA-256
+  fingerprint of every tool definition; a test fails if the tool surface drifts,
+  forcing an intentional regeneration via `scripts/update_tool_manifest.py`.
+- **Live-test workflow** (OPS-001): `.github/workflows/live.yml` runs the
+  `@pytest.mark.live` integration tests on a weekly schedule / manual dispatch
+  (separate from credential-free CI). New respx-based tests exercise the real
+  HTTP path (token + API + egress guard + parser), not just a mocked `_call_api`.
 - **Container & cloud deployment** (SEC-007 / SCALE-002 / SCALE-003 / SCALE-004 /
   SCALE-006): a hardened multi-stage `Dockerfile` (non-root UID 10001,
   `HEALTHCHECK`), `docker-compose.yml` with resource limits (memory/CPU/PIDs/FDs)

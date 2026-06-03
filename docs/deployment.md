@@ -69,7 +69,13 @@ backend check.
 
 ## Network egress (SEC-005 / SEC-021)
 
-For public deployments set `MCP_ALLOWED_HOSTS` and `MCP_ALLOWED_ORIGINS` to
-enable DNS-rebinding protection and scope CORS. The server only ever calls the
-fixed IGE endpoints (`idp.ipi.ch`, `www.swissreg.ch`); restrict egress at the
-network layer to those hosts where possible.
+Two layers:
+
+- **Code layer (SEC-021):** an immutable `ALLOWED_EGRESS_HOSTS` frozenset
+  (`idp.ipi.ch`, `www.swissreg.ch`) is enforced by `_assert_host_allowed()`
+  before *every* outgoing request. Any attempt to reach another host raises.
+- **Network layer:** restrict egress to those two hosts via a NetworkPolicy /
+  security group / egress proxy where possible.
+
+For public deployments also set `MCP_ALLOWED_HOSTS` and `MCP_ALLOWED_ORIGINS`
+to enable DNS-rebinding protection and scope CORS.
