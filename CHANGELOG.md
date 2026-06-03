@@ -6,6 +6,15 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ## [Unreleased]
 
 ### Added
+- **Container & cloud deployment** (SEC-007 / SCALE-002 / SCALE-003 / SCALE-004 /
+  SCALE-006): a hardened multi-stage `Dockerfile` (non-root UID 10001,
+  `HEALTHCHECK`), `docker-compose.yml` with resource limits (memory/CPU/PIDs/FDs)
+  and read-only rootfs, Kubernetes manifests with a full `securityContext`
+  (runAsNonRoot, dropped capabilities, seccomp, read-only rootfs) and resource
+  requests/limits, plus an HAProxy config that pins `Mcp-Session-Id` to a backend
+  for stateful mode. A `GET /health` endpoint backs container/LB probes, and
+  `MCP_STATELESS_HTTP=1` enables affinity-free horizontal scaling. See
+  `docs/deployment.md`.
 - **MCP Resources & Prompts** (ARCH-008): the server now exposes all three MCP
   primitives. Resources `swissip://about` and `swissip://domains` provide
   read-only metadata; prompts `trademark_availability`, `competitor_ip_report`

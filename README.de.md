@@ -211,6 +211,20 @@ MCP_TRANSPORT=streamable-http \
 > öffentliche IP-Registerdaten; ohne vorher ergänzte Authentifizierung keine
 > credential-behafteten oder nicht-öffentlichen Tools dahinter betreiben.
 
+### Docker / Kubernetes
+
+Enthalten sind ein gehärteter Multi-Stage-[`Dockerfile`](Dockerfile) (non-root
+UID 10001, `HEALTHCHECK` auf `/health`), eine [`docker-compose.yml`](docker-compose.yml)
+mit Resource-Limits sowie Kubernetes-Manifeste + eine HAProxy-Sticky-Session-Config
+unter [`deploy/`](deploy/).
+
+```bash
+docker compose up --build   # liest IGE_* aus .env
+```
+
+Details zu Hardening, Resource-Limits und Skalierung (stateless vs.
+Sticky-Session) siehe [`docs/deployment.md`](docs/deployment.md).
+
 ---
 
 ## Tests
