@@ -330,8 +330,16 @@ def _parse_result_page(root: ET.Element) -> dict:
 
 
 def _handle_error(e: Exception) -> str:
-    """Formatiert API-Fehler in verständliche Meldungen."""
+    """Map an exception to a safe, user-facing message (OBS-002).
+
+    Full exception detail — including upstream response bodies and exception
+    reprs — is logged server-side only. The returned string never carries
+    internals (stack traces, raw API bodies) to the client / LLM.
+    """
+    logger.warning("Tool error: %r", e, exc_info=True)
     if isinstance(e, ValueError):
+        # Raised by our own config check with a deliberate, safe help text
+        # (missing IGE credentials) — no internals, keep it verbatim.
         return f"Konfigurationsfehler: {e}"
     if isinstance(e, httpx.HTTPStatusError):
         status = e.response.status_code
@@ -350,10 +358,16 @@ def _handle_error(e: Exception) -> str:
                 "Fehler 429: Rate-Limit / Kontingent überschritten. "
                 "Mit swiss_ip_get_quota das verbleibende Kontingent prüfen."
             )
-        return f"API-Fehler {status}: {e.response.text[:500]}"
+        return (
+            f"API-Fehler {status}: Die Anfrage an die Swissreg-API ist "
+            "fehlgeschlagen. Details stehen im Server-Log."
+        )
     if isinstance(e, httpx.TimeoutException):
         return "Fehler: Anfrage hat das Timeout überschritten. Bitte erneut versuchen."
-    return f"Unerwarteter Fehler ({type(e).__name__}): {e}"
+    return (
+        "Unerwarteter Fehler bei der Verarbeitung der Anfrage. "
+        "Details stehen im Server-Log."
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -363,6 +377,64 @@ def _handle_error(e: Exception) -> str:
 class ResponseFormat(StrEnum):
     MARKDOWN = "markdown"
     JSON = "json"
+
+
+# ---------------------------------------------------------------------------
+# Response rendering (SDK-003 — honour the response_format parameter)
+# ---------------------------------------------------------------------------
+
+def _scalarize(value: object) -> str:
+    """Render a value inline; nested structures fall back to compact JSON."""
+    if isinstance(value, (dict, list)):
+        return json.dumps(value, ensure_ascii=False)
+    return str(value)
+
+
+def _to_markdown(payload: dict) -> str:
+    """Render a result envelope as readable Markdown."""
+    if "error" in payload:
+        return f"**Fehler:** {payload['error']}"
+
+    lines: list[str] = []
+    total = payload.get("total")
+    count = payload.get("count")
+    header = "## Ergebnisse"
+    if total is not None:
+        header += f" ({count} von {total})"
+    elif count is not None:
+        header += f" ({count})"
+    lines.append(header)
+
+    # Top-level scalar metadata (e.g. nice_class_searched, date_range).
+    skip = {"items", "total", "count", "next_page_token"}
+    for key, value in payload.items():
+        if key in skip:
+            continue
+        lines.append(f"- **{key}:** {_scalarize(value)}")
+
+    items = payload.get("items") or []
+    if not items:
+        lines.extend(["", "_Keine Einträge gefunden._"])
+    for idx, item in enumerate(items, 1):
+        lines.extend(["", f"### {idx}."])
+        if isinstance(item, dict):
+            for key, value in item.items():
+                lines.append(f"- **{key}:** {_scalarize(value)}")
+        else:
+            lines.append(f"- {_scalarize(item)}")
+
+    token = payload.get("next_page_token")
+    if token:
+        lines.extend(["", f"_Weitere Ergebnisse: page_token=`{token}`_"])
+
+    return "\n".join(lines)
+
+
+def _render(payload: dict, fmt: ResponseFormat) -> str:
+    """Serialise a tool result in the requested response format."""
+    if fmt == ResponseFormat.MARKDOWN:
+        return _to_markdown(payload)
+    return json.dumps(payload, ensure_ascii=False, indent=2)
 
 
 # ---------------------------------------------------------------------------
@@ -464,8 +536,8 @@ class TrademarkSearchInput(BaseModel):
         description="Nach letzter Aktualisierung absteigend sortieren (neueste zuerst).",
     )
     response_format: ResponseFormat = Field(
-        default=ResponseFormat.MARKDOWN,
-        description="Ausgabeformat: 'markdown' oder 'json'",
+        default=ResponseFormat.JSON,
+        description="Ausgabeformat: 'markdown' oder 'json' (Standard: json).",
     )
 
 
@@ -484,8 +556,8 @@ class TrademarkOwnerSearchInput(BaseModel):
     page_size: int = Field(default=10, ge=1, le=50)
     page_token: Optional[str] = Field(default=None)
     response_format: ResponseFormat = Field(
-        default=ResponseFormat.MARKDOWN,
-        description="Ausgabeformat: 'markdown' oder 'json'",
+        default=ResponseFormat.JSON,
+        description="Ausgabeformat: 'markdown' oder 'json' (Standard: json).",
     )
 
 
@@ -502,8 +574,8 @@ class TrademarkNumberInput(BaseModel):
         max_length=50,
     )
     response_format: ResponseFormat = Field(
-        default=ResponseFormat.MARKDOWN,
-        description="Ausgabeformat: 'markdown' oder 'json'",
+        default=ResponseFormat.JSON,
+        description="Ausgabeformat: 'markdown' oder 'json' (Standard: json).",
     )
 
 
@@ -527,8 +599,8 @@ class TrademarkClassInput(BaseModel):
     page_size: int = Field(default=10, ge=1, le=50)
     page_token: Optional[str] = Field(default=None)
     response_format: ResponseFormat = Field(
-        default=ResponseFormat.MARKDOWN,
-        description="Ausgabeformat: 'markdown' oder 'json'",
+        default=ResponseFormat.JSON,
+        description="Ausgabeformat: 'markdown' oder 'json' (Standard: json).",
     )
 
 
@@ -548,8 +620,8 @@ class PatentSearchInput(BaseModel):
     page_token: Optional[str] = Field(default=None)
     sort_descending: bool = Field(default=True)
     response_format: ResponseFormat = Field(
-        default=ResponseFormat.MARKDOWN,
-        description="Ausgabeformat: 'markdown' oder 'json'",
+        default=ResponseFormat.JSON,
+        description="Ausgabeformat: 'markdown' oder 'json' (Standard: json).",
     )
 
 
@@ -565,8 +637,8 @@ class PatentNumberInput(BaseModel):
         max_length=50,
     )
     response_format: ResponseFormat = Field(
-        default=ResponseFormat.MARKDOWN,
-        description="Ausgabeformat: 'markdown' oder 'json'",
+        default=ResponseFormat.JSON,
+        description="Ausgabeformat: 'markdown' oder 'json' (Standard: json).",
     )
 
 
@@ -585,8 +657,8 @@ class PatentApplicantInput(BaseModel):
     page_size: int = Field(default=10, ge=1, le=50)
     page_token: Optional[str] = Field(default=None)
     response_format: ResponseFormat = Field(
-        default=ResponseFormat.MARKDOWN,
-        description="Ausgabeformat: 'markdown' oder 'json'",
+        default=ResponseFormat.JSON,
+        description="Ausgabeformat: 'markdown' oder 'json' (Standard: json).",
     )
 
 
@@ -614,8 +686,8 @@ class DateRangeInput(BaseModel):
     page_size: int = Field(default=10, ge=1, le=50)
     page_token: Optional[str] = Field(default=None)
     response_format: ResponseFormat = Field(
-        default=ResponseFormat.MARKDOWN,
-        description="Ausgabeformat: 'markdown' oder 'json'",
+        default=ResponseFormat.JSON,
+        description="Ausgabeformat: 'markdown' oder 'json' (Standard: json).",
     )
 
 
@@ -634,8 +706,8 @@ class SpcSearchInput(BaseModel):
     page_size: int = Field(default=10, ge=1, le=50)
     page_token: Optional[str] = Field(default=None)
     response_format: ResponseFormat = Field(
-        default=ResponseFormat.MARKDOWN,
-        description="Ausgabeformat: 'markdown' oder 'json'",
+        default=ResponseFormat.JSON,
+        description="Ausgabeformat: 'markdown' oder 'json' (Standard: json).",
     )
 
 
@@ -676,9 +748,9 @@ async def swiss_ip_search_trademarks(params: TrademarkSearchInput) -> str:
     try:
         root = await _call_api(xml_body)
         result = _parse_result_page(root)
-        return json.dumps(result, ensure_ascii=False, indent=2)
+        return _render(result, params.response_format)
     except Exception as e:
-        return json.dumps({"error": _handle_error(e)})
+        return _render({"error": _handle_error(e)}, params.response_format)
 
 
 @mcp.tool(
@@ -716,9 +788,9 @@ async def swiss_ip_search_trademarks_by_owner(
     try:
         root = await _call_api(xml_body)
         result = _parse_result_page(root)
-        return json.dumps(result, ensure_ascii=False, indent=2)
+        return _render(result, params.response_format)
     except Exception as e:
-        return json.dumps({"error": _handle_error(e)})
+        return _render({"error": _handle_error(e)}, params.response_format)
 
 
 @mcp.tool(
@@ -749,13 +821,13 @@ async def swiss_ip_get_trademark(params: TrademarkNumberInput) -> str:
         root = await _call_api(xml_body)
         result = _parse_result_page(root)
         if result["count"] == 0:
-            return json.dumps({
+            return _render({
                 "error": f"Marke '{params.trademark_number}' nicht gefunden. "
                          "Bitte Nummernformat prüfen (z.B. 'P-756123')."
-            })
-        return json.dumps(result, ensure_ascii=False, indent=2)
+            }, params.response_format)
+        return _render(result, params.response_format)
     except Exception as e:
-        return json.dumps({"error": _handle_error(e)})
+        return _render({"error": _handle_error(e)}, params.response_format)
 
 
 @mcp.tool(
@@ -802,9 +874,9 @@ async def swiss_ip_search_trademarks_by_class(
         root = await _call_api(xml_body)
         result = _parse_result_page(root)
         result["nice_class_searched"] = params.nice_class
-        return json.dumps(result, ensure_ascii=False, indent=2)
+        return _render(result, params.response_format)
     except Exception as e:
-        return json.dumps({"error": _handle_error(e)})
+        return _render({"error": _handle_error(e)}, params.response_format)
 
 
 # ---------------------------------------------------------------------------
@@ -844,9 +916,9 @@ async def swiss_ip_search_patents(params: PatentSearchInput) -> str:
     try:
         root = await _call_api(xml_body)
         result = _parse_result_page(root)
-        return json.dumps(result, ensure_ascii=False, indent=2)
+        return _render(result, params.response_format)
     except Exception as e:
-        return json.dumps({"error": _handle_error(e)})
+        return _render({"error": _handle_error(e)}, params.response_format)
 
 
 @mcp.tool(
@@ -877,15 +949,15 @@ async def swiss_ip_get_patent(params: PatentNumberInput) -> str:
         root = await _call_api(xml_body)
         result = _parse_result_page(root)
         if result["count"] == 0:
-            return json.dumps({
+            return _render({
                 "error": (
                     f"Patent '{params.patent_number}' nicht gefunden. "
                     "Bitte Format prüfen (z.B. 'CH700123' oder '700123')."
                 )
-            })
-        return json.dumps(result, ensure_ascii=False, indent=2)
+            }, params.response_format)
+        return _render(result, params.response_format)
     except Exception as e:
-        return json.dumps({"error": _handle_error(e)})
+        return _render({"error": _handle_error(e)}, params.response_format)
 
 
 @mcp.tool(
@@ -921,9 +993,9 @@ async def swiss_ip_search_patents_by_applicant(
     try:
         root = await _call_api(xml_body)
         result = _parse_result_page(root)
-        return json.dumps(result, ensure_ascii=False, indent=2)
+        return _render(result, params.response_format)
     except Exception as e:
-        return json.dumps({"error": _handle_error(e)})
+        return _render({"error": _handle_error(e)}, params.response_format)
 
 
 @mcp.tool(
@@ -959,9 +1031,9 @@ async def swiss_ip_search_patent_publications(
     try:
         root = await _call_api(xml_body)
         result = _parse_result_page(root)
-        return json.dumps(result, ensure_ascii=False, indent=2)
+        return _render(result, params.response_format)
     except Exception as e:
-        return json.dumps({"error": _handle_error(e)})
+        return _render({"error": _handle_error(e)}, params.response_format)
 
 
 # ---------------------------------------------------------------------------
@@ -997,9 +1069,9 @@ async def swiss_ip_search_spc(params: SpcSearchInput) -> str:
     try:
         root = await _call_api(xml_body)
         result = _parse_result_page(root)
-        return json.dumps(result, ensure_ascii=False, indent=2)
+        return _render(result, params.response_format)
     except Exception as e:
-        return json.dumps({"error": _handle_error(e)})
+        return _render({"error": _handle_error(e)}, params.response_format)
 
 
 # ---------------------------------------------------------------------------
@@ -1062,9 +1134,9 @@ async def swiss_ip_search_recent_filings(params: DateRangeInput) -> str:
             "to": params.date_to,
             "ip_type": params.ip_type,
         }
-        return json.dumps(result, ensure_ascii=False, indent=2)
+        return _render(result, params.response_format)
     except Exception as e:
-        return json.dumps({"error": _handle_error(e)})
+        return _render({"error": _handle_error(e)}, params.response_format)
 
 
 @mcp.tool(
@@ -1074,7 +1146,7 @@ async def swiss_ip_search_recent_filings(params: DateRangeInput) -> str:
         "readOnlyHint": True,
         "destructiveHint": False,
         "idempotentHint": True,
-        "openWorldHint": False,
+        "openWorldHint": True,
     },
 )
 async def swiss_ip_get_quota() -> str:
@@ -1088,8 +1160,8 @@ async def swiss_ip_get_quota() -> str:
         root = await _call_api(_quota_request())
         quota_dict = _el_to_dict(root)
         return json.dumps(quota_dict, ensure_ascii=False, indent=2)
-    except Exception as e:
-        return json.dumps({"error": _handle_error(e)})
+    except Exception as e:  # quota has no response_format — always JSON
+        return json.dumps({"error": _handle_error(e)}, ensure_ascii=False)
 
 
 # ---------------------------------------------------------------------------

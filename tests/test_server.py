@@ -154,9 +154,21 @@ class TestErrorHandler:
         msg = _handle_error(httpx.ReadTimeout("timed out"))
         assert "timed out" in msg.lower() or "timeout" in msg.lower()
 
-    def test_generic(self):
-        msg = _handle_error(RuntimeError("boom"))
-        assert "boom" in msg
+    def test_generic_is_masked(self):
+        # OBS-002: internal exception detail must NOT leak to the client.
+        msg = _handle_error(RuntimeError("boom secret stacktrace"))
+        assert "boom" not in msg
+        assert "Server-Log" in msg
+
+    def test_http_error_body_is_masked(self):
+        import httpx
+
+        resp = MagicMock(status_code=500)
+        resp.text = "SECRET upstream body with internals"
+        err = httpx.HTTPStatusError("500", request=MagicMock(), response=resp)
+        msg = _handle_error(err)
+        assert "SECRET" not in msg
+        assert "500" in msg
 
 
 # ---------------------------------------------------------------------------
@@ -369,6 +381,61 @@ class TestInputValidation:
 # ---------------------------------------------------------------------------
 # Integration / smoke tests (live, skipped without credentials)
 # ---------------------------------------------------------------------------
+
+# ---------------------------------------------------------------------------
+# Unit tests – response_format rendering (SDK-003)
+# ---------------------------------------------------------------------------
+
+class TestResponseFormat:
+    def test_render_json_is_parseable(self):
+        from swiss_ip_mcp.server import ResponseFormat, _render
+
+        out = _render({"count": 1, "items": [{"a": "b"}]}, ResponseFormat.JSON)
+        assert json.loads(out)["count"] == 1
+
+    def test_render_markdown_has_headers_and_fields(self):
+        from swiss_ip_mcp.server import ResponseFormat, _render
+
+        payload = {
+            "total": "42",
+            "count": 1,
+            "items": [{"MarkName": "ZÜRITEST", "Status": "Registered"}],
+            "next_page_token": "tok123",
+        }
+        out = _render(payload, ResponseFormat.MARKDOWN)
+        assert out.startswith("## Ergebnisse (1 von 42)")
+        assert "**MarkName:** ZÜRITEST" in out
+        assert "tok123" in out
+        # not JSON
+        with pytest.raises(json.JSONDecodeError):
+            json.loads(out)
+
+    def test_render_markdown_error(self):
+        from swiss_ip_mcp.server import ResponseFormat, _render
+
+        out = _render({"error": "kaputt"}, ResponseFormat.MARKDOWN)
+        assert out == "**Fehler:** kaputt"
+
+    @pytest.mark.asyncio
+    async def test_tool_honours_markdown_format(self):
+        root = _make_root(SAMPLE_TM_XML)
+        with patch("swiss_ip_mcp.server._call_api", new=AsyncMock(return_value=root)):
+            from swiss_ip_mcp.server import ResponseFormat, TrademarkSearchInput
+            params = TrademarkSearchInput(
+                query="ZÜRITEST", response_format=ResponseFormat.MARKDOWN
+            )
+            out = await swiss_ip_search_trademarks(params)
+            assert out.lstrip().startswith("## Ergebnisse")
+
+    @pytest.mark.asyncio
+    async def test_tool_default_format_is_json(self):
+        root = _make_root(SAMPLE_TM_XML)
+        with patch("swiss_ip_mcp.server._call_api", new=AsyncMock(return_value=root)):
+            from swiss_ip_mcp.server import TrademarkSearchInput
+            params = TrademarkSearchInput(query="ZÜRITEST")  # no explicit format
+            out = await swiss_ip_search_trademarks(params)
+            assert json.loads(out)["count"] == 2  # still JSON by default
+
 
 # ---------------------------------------------------------------------------
 # Unit tests – pooled HTTP client & lifespan (SDK-001)

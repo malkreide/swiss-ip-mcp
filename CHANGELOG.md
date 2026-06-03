@@ -18,18 +18,28 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   `MCP_ALLOWED_ORIGINS`.
 - Pooled `httpx.AsyncClient` owned by a server lifespan — connections are now
   reused across tool calls instead of a new client per request.
+- `.env.example` with placeholders for credentials and transport configuration.
 
 ### Changed
 - `_call_api` uses the shared pooled HTTP client instead of opening a new
   `httpx.AsyncClient` on every call.
 - README / README.de transport sections updated to match the implementation,
   including a security note for public deployments.
+- The `response_format` parameter is now honoured: tools render Markdown when
+  `response_format=markdown` is requested (default remains `json`).
+- `swiss_ip_get_quota` now declares `openWorldHint: true` (it reaches the
+  external IGE API).
+
+### Fixed
+- Error messages no longer leak internals (exception reprs, raw upstream
+  response bodies) to the client; full detail is logged server-side only.
 
 ### Notes
 - Remediates audit findings SCALE-001 (transport drift) and SDK-001 (client
   lifecycle); hardens SDK-004 (CORS), SEC-016 (host binding) and SEC-005
-  (DNS-rebinding). The HTTP endpoint remains unauthenticated by design and
-  serves only public IP-register data.
+  (DNS-rebinding). Quick-wins address OBS-002 (error masking), ARCH-009
+  (`openWorldHint`) and SDK-003 (`response_format`). The HTTP endpoint remains
+  unauthenticated by design and serves only public IP-register data.
 
 ## [1.0.0] - 2026-03-29
 v1.0.0 — Initial Release
