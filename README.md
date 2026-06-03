@@ -247,6 +247,14 @@ all log lines for one call are correlated. Set the level with `LOG_LEVEL`
 
 ---
 
+## MCP Protocol Version
+
+The MCP protocol version is provided by the pinned [MCP Python SDK](https://github.com/modelcontextprotocol/python-sdk) (`mcp`, used via `fastmcp`) and negotiated per the spec during `initialize` — the server agrees on the highest version both it and the client support. With the currently pinned SDK the latest supported version is **`2025-11-25`** (older clients negotiate down automatically). This value follows the SDK, so it is not hard-coded here.
+
+**Update policy:** the SDK floor is pinned in `pyproject.toml`; [Dependabot](.github/dependabot.yml) opens monthly PRs for `mcp` / `fastmcp` updates. Protocol-version or SDK bumps that change behaviour are reviewed in those PRs and recorded in [`CHANGELOG.md`](CHANGELOG.md).
+
+---
+
 ## Data Source
 
 All data is provided by the [IGE/IPI Swissreg Datadelivery API](https://www.swissreg.ch/public/apidocs/). The API is free after signing the usage terms, subject to a monthly data transfer quota. Check your remaining quota at any time using the `swiss_ip_get_quota` tool.

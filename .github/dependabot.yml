@@ -1,0 +1,23 @@
+version: 2
+updates:
+  # Python dependencies (mcp / fastmcp SDK, httpx, pydantic, …)
+  - package-ecosystem: "pip"
+    directory: "/"
+    schedule:
+      interval: "monthly"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+    groups:
+      mcp-sdk:
+        patterns:
+          - "mcp"
+          - "fastmcp"
+
+  # GitHub Actions used in CI / publish workflows
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "monthly"
+    labels:
+      - "dependencies"
