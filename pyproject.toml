@@ -27,6 +27,8 @@ dependencies = [
     "uvicorn>=0.30.0",
     # Tracing API only — no-op without a provider; SDK/exporter live in the [otel] extra.
     "opentelemetry-api>=1.20.0",
+    # Structured JSON logging on stderr (OBS-003).
+    "structlog>=24.1.0",
 ]
 
 [project.optional-dependencies]

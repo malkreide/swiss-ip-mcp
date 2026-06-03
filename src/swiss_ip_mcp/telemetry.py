@@ -22,14 +22,17 @@ Enable with either:
 from __future__ import annotations
 
 import functools
-import logging
 import os
+import uuid
 from collections.abc import Awaitable, Callable
 from typing import TypeVar
 
+import structlog
 from opentelemetry import trace
 
-logger = logging.getLogger("swiss_ip_mcp")
+from swiss_ip_mcp.logging_config import get_logger
+
+logger = get_logger("swiss_ip_mcp")
 
 SERVICE_NAME = "swiss-ip-mcp"
 
@@ -56,7 +59,12 @@ def mark_error(is_error: bool) -> None:
 
 
 def traced_tool(func: _F) -> _F:
-    """Wrap an MCP tool handler in a span carrying only its name.
+    """Wrap an MCP tool handler with a span and bound log context.
+
+    Adds an OpenTelemetry span (`mcp.tool.name`, `mcp.tool.result.is_error`)
+    and binds a per-call `tool` + `correlation_id` into the structlog context
+    (OBS-003), so every log line emitted during the call is correlated. No
+    arguments are logged (no PII).
 
     `functools.wraps` keeps the original signature so FastMCP's input-schema
     introspection is unaffected.
@@ -64,10 +72,19 @@ def traced_tool(func: _F) -> _F:
 
     @functools.wraps(func)
     async def wrapper(*args, **kwargs):  # type: ignore[no-untyped-def]
+        correlation_id = uuid.uuid4().hex
+        structlog.contextvars.bind_contextvars(
+            tool=func.__name__, correlation_id=correlation_id
+        )
         with tracer.start_as_current_span(f"mcp.tool/{func.__name__}") as span:
             span.set_attribute("mcp.tool.name", func.__name__)
             span.set_attribute("mcp.tool.result.is_error", False)
-            return await func(*args, **kwargs)
+            logger.info("tool.call.start")
+            try:
+                return await func(*args, **kwargs)
+            finally:
+                logger.debug("tool.call.end")
+                structlog.contextvars.unbind_contextvars("tool", "correlation_id")
 
     return wrapper  # type: ignore[return-value]
 
@@ -90,10 +107,7 @@ def setup_telemetry() -> bool:
         from opentelemetry.sdk.trace import TracerProvider
         from opentelemetry.sdk.trace.export import BatchSpanProcessor
     except ImportError:
-        logger.warning(
-            "MCP_OTEL_ENABLED is set but the 'otel' extra is not installed. "
-            "Install with: pip install 'swiss-ip-mcp[otel]'. Tracing disabled."
-        )
+        logger.warning("otel_extra_missing", hint="pip install 'swiss-ip-mcp[otel]'")
         return False
 
     resource = Resource.create(
@@ -109,5 +123,5 @@ def setup_telemetry() -> bool:
     # Backend Swissreg/IDP calls become child spans automatically.
     HTTPXClientInstrumentor().instrument()
 
-    logger.info("OpenTelemetry tracing enabled (service.name=%s)", SERVICE_NAME)
+    logger.info("otel_tracing_enabled", service_name=SERVICE_NAME)
     return True

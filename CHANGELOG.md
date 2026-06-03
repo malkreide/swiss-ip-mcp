@@ -6,6 +6,10 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ## [Unreleased]
 
 ### Added
+- **Structured logging** (OBS-003): logs are now emitted as JSON on stderr via
+  `structlog` (stdout stays clean for the stdio protocol). Each tool call binds
+  a `tool` name and `correlation_id`; four severity levels are used. Level is
+  configurable via `LOG_LEVEL` (default `INFO`).
 - **Tool ergonomics** (ARCH-002 / ARCH-003): every tool description now carries a
   `<use_case>` tag (plus `<important_notes>` where relevant). Search/list
   responses include a `match_type` field (`exact` / `none`) and, on empty

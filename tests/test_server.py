@@ -439,6 +439,47 @@ class TestInputValidation:
 
 
 # ---------------------------------------------------------------------------
+# Unit tests – structured logging (OBS-003)
+# ---------------------------------------------------------------------------
+
+class TestStructuredLogging:
+    def test_get_logger_configures(self):
+        from swiss_ip_mcp import logging_config
+
+        logging_config.setup_logging()
+        assert logging_config._configured is True
+        assert logging_config.get_logger("x") is not None
+
+    @pytest.mark.asyncio
+    async def test_tool_call_emits_start_event(self):
+        import structlog
+
+        root = _make_root(SAMPLE_TM_XML)
+        with structlog.testing.capture_logs() as logs:
+            with patch("swiss_ip_mcp.server._call_api", new=AsyncMock(return_value=root)):
+                from swiss_ip_mcp.server import TrademarkSearchInput
+                await swiss_ip_search_trademarks(TrademarkSearchInput(query="x"))
+        events = [e["event"] for e in logs]
+        assert "tool.call.start" in events
+
+    @pytest.mark.asyncio
+    async def test_unexpected_error_logged_at_error_level(self):
+        import structlog
+
+        with structlog.testing.capture_logs() as logs:
+            with patch(
+                "swiss_ip_mcp.server._call_api",
+                new=AsyncMock(side_effect=RuntimeError("boom")),
+            ):
+                from swiss_ip_mcp.server import TrademarkSearchInput
+                await swiss_ip_search_trademarks(TrademarkSearchInput(query="x"))
+        errors = [e for e in logs if e["event"] == "unexpected_error"]
+        assert errors and errors[0]["log_level"] == "error"
+        # no raw exception value leaks into the structured event
+        assert "boom" not in str(errors[0])
+
+
+# ---------------------------------------------------------------------------
 # Integration / smoke tests (live, skipped without credentials)
 # ---------------------------------------------------------------------------
 
@@ -709,8 +750,8 @@ class TestHttpServing:
         assert captured["port"] == 8123
         assert "CORSMiddleware" in captured["middlewares"]
 
-    def test_run_http_warns_on_public_bind_outside_container(self, monkeypatch, caplog):
-        import logging
+    def test_run_http_warns_on_public_bind_outside_container(self, monkeypatch):
+        import structlog
 
         import swiss_ip_mcp.server as srv
 
@@ -718,10 +759,11 @@ class TestHttpServing:
         monkeypatch.setattr(srv, "_in_container", lambda: False)
         monkeypatch.setitem(__import__("sys").modules, "uvicorn", MagicMock())
 
-        with caplog.at_level(logging.WARNING):
+        with structlog.testing.capture_logs() as logs:
             srv._run_http("streamable-http")
 
-        assert any("0.0.0.0" in r.message for r in caplog.records)
+        warnings = [e for e in logs if e["event"] == "bind_public_without_container"]
+        assert warnings and warnings[0]["host"] == "0.0.0.0"
 
 
 @pytest.mark.skipif(not LIVE, reason="IGE_USERNAME not set – skipping live tests")

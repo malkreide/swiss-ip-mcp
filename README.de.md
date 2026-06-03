@@ -225,6 +225,18 @@ Tool-Spans enthalten ausschliesslich `mcp.tool.name` und
 `mcp.tool.result.is_error` — **keine Suchargumente, Credentials oder
 Antwort-Bodies**.
 
+### Logging
+
+Der Server loggt strukturiertes JSON auf **stderr** (stdout ist für das
+stdio-Protokoll reserviert). Jeder Tool-Call bindet einen `tool`-Namen und eine
+`correlation_id`, sodass alle Log-Zeilen eines Calls korreliert sind. Das Level
+wird über `LOG_LEVEL` gesetzt (`DEBUG` / `INFO` / `WARNING` / `ERROR`, Standard
+`INFO`):
+
+```json
+{"event": "tool.call.start", "tool": "swiss_ip_search_trademarks", "correlation_id": "da55…", "level": "info", "timestamp": "…Z"}
+```
+
 ---
 
 ## Datenquelle
