@@ -53,11 +53,13 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   responses include a `match_type` field (`exact` / `none`) and, on empty
   results, an actionable `suggestion` instead of a bare empty list. Number
   lookups are documented as exact-only.
-- **Response provenance + envelope** (CH-004 / SDK-002): every tool response now
-  carries a `source` block (provider, source URL, license). Search/list tools
-  use a consistent envelope `{ source, total, count, results, next_page_token }`
-  and `swiss_ip_get_quota` returns `{ source, quota }`. README documents the data
-  license explicitly.
+- **Typed responses + provenance** (SDK-002 / CH-004): tools now return typed
+  Pydantic models (`SearchEnvelope` / `QuotaEnvelope`) instead of JSON strings,
+  so FastMCP emits a JSON schema (`outputSchema`) and `structuredContent`. Every
+  response carries a typed `source` provenance block (provider, source URL,
+  license); the search/list envelope is
+  `{ source, total, count, match_type, results, next_page_token, … }`. README
+  documents the data license explicitly.
 - **Optional OpenTelemetry tracing** (`MCP_OTEL_ENABLED=1`, install
   `swiss-ip-mcp[otel]`): one span per tool call (`mcp.tool.name`,
   `mcp.tool.result.is_error`) plus httpx auto-instrumented child spans for
@@ -85,8 +87,9 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   `httpx.AsyncClient` on every call.
 - README / README.de transport sections updated to match the implementation,
   including a security note for public deployments.
-- The `response_format` parameter is now honoured: tools render Markdown when
-  `response_format=markdown` is requested (default remains `json`).
+- **Removed the `response_format` / Markdown option** in favour of fully typed
+  returns (SDK-002): tools always return structured data now, which MCP clients
+  receive as both JSON text and `structuredContent`.
 - `swiss_ip_get_quota` now declares `openWorldHint: true` (it reaches the
   external IGE API).
 
@@ -97,8 +100,8 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ### Notes
 - Remediates audit findings SCALE-001 (transport drift) and SDK-001 (client
   lifecycle); hardens SDK-004 (CORS), SEC-016 (host binding) and SEC-005
-  (DNS-rebinding). Quick-wins address OBS-002 (error masking), ARCH-009
-  (`openWorldHint`) and SDK-003 (`response_format`); OBS-006 adds optional
+  (DNS-rebinding). Quick-wins address OBS-002 (error masking) and ARCH-009
+  (`openWorldHint`); OBS-006 adds optional
   distributed tracing. The HTTP endpoint remains unauthenticated by design and
   serves only public IP-register data.
 

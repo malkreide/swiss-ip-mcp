@@ -128,15 +128,15 @@ class TestXmlHelpers:
     def test_parse_result_page_with_items(self):
         root = _make_root(SAMPLE_TM_XML)
         result = _parse_result_page(root)
-        assert result["count"] == 2
-        assert result["total"] == "42"
-        assert result["next_page_token"] is None
+        assert result.count == 2
+        assert result.total == "42"
+        assert result.next_page_token is None
 
     def test_parse_result_page_empty(self):
         root = _make_root(SAMPLE_EMPTY_XML)
         result = _parse_result_page(root)
-        assert result["count"] == 0
-        assert result["total"] == "0"
+        assert result.count == 0
+        assert result.total == "0"
 
 
 # ---------------------------------------------------------------------------
@@ -194,9 +194,7 @@ class TestProvenance:
         root = _make_root(SAMPLE_TM_XML)
         with patch("swiss_ip_mcp.server._call_api", new=AsyncMock(return_value=root)):
             from swiss_ip_mcp.server import TrademarkSearchInput
-            result = json.loads(
-                await swiss_ip_search_trademarks(TrademarkSearchInput(query="x"))
-            )
+            result = (await swiss_ip_search_trademarks(TrademarkSearchInput(query="x"))).model_dump(exclude_none=True)
         assert result["source"]["name"].startswith("Swissreg")
         assert "license" in result["source"]
         assert isinstance(result["results"], list)
@@ -207,9 +205,7 @@ class TestProvenance:
         root = _make_root(SAMPLE_TM_XML)
         with patch("swiss_ip_mcp.server._call_api", new=AsyncMock(return_value=root)):
             from swiss_ip_mcp.server import TrademarkSearchInput
-            result = json.loads(
-                await swiss_ip_search_trademarks(TrademarkSearchInput(query="x"))
-            )
+            result = (await swiss_ip_search_trademarks(TrademarkSearchInput(query="x"))).model_dump(exclude_none=True)
         assert result["match_type"] == "exact"
         assert "suggestion" not in result
 
@@ -219,9 +215,7 @@ class TestProvenance:
         root = _make_root(SAMPLE_EMPTY_XML)
         with patch("swiss_ip_mcp.server._call_api", new=AsyncMock(return_value=root)):
             from swiss_ip_mcp.server import PatentSearchInput
-            result = json.loads(
-                await swiss_ip_search_patents(PatentSearchInput(query="zzzznomatch"))
-            )
+            result = (await swiss_ip_search_patents(PatentSearchInput(query="zzzznomatch"))).model_dump(exclude_none=True)
         assert result["match_type"] == "none"
         assert result["count"] == 0
         assert "Wildcard" in result["suggestion"]
@@ -230,7 +224,7 @@ class TestProvenance:
     async def test_quota_has_source(self):
         root = _make_root(SAMPLE_QUOTA_XML)
         with patch("swiss_ip_mcp.server._call_api", new=AsyncMock(return_value=root)):
-            result = json.loads(await swiss_ip_get_quota())
+            result = (await swiss_ip_get_quota()).model_dump(exclude_none=True)
         assert result["source"]["provider"].startswith("Swiss Federal Institute")
         assert "quota" in result
 
@@ -243,7 +237,7 @@ class TestTrademarkTools:
             from swiss_ip_mcp.server import TrademarkSearchInput
             params = TrademarkSearchInput(query="ZÜRITEST")
             result_str = await swiss_ip_search_trademarks(params)
-            result = json.loads(result_str)
+            result = result_str.model_dump(exclude_none=True)
             assert result["count"] == 2
             assert result["total"] == "42"
 
@@ -269,7 +263,7 @@ class TestTrademarkTools:
             from swiss_ip_mcp.server import TrademarkNumberInput
             params = TrademarkNumberInput(trademark_number="P-000000")
             result_str = await swiss_ip_get_trademark(params)
-            result = json.loads(result_str)
+            result = result_str.model_dump(exclude_none=True)
             # not-found is a valid empty result (isError=false), not an error
             assert result["match_type"] == "none"
             assert result["count"] == 0
@@ -282,7 +276,7 @@ class TestTrademarkTools:
             from swiss_ip_mcp.server import TrademarkOwnerSearchInput
             params = TrademarkOwnerSearchInput(owner_name="Mustermann AG")
             result_str = await swiss_ip_search_trademarks_by_owner(params)
-            result = json.loads(result_str)
+            result = result_str.model_dump(exclude_none=True)
             assert result["count"] == 2
 
     @pytest.mark.asyncio
@@ -292,7 +286,7 @@ class TestTrademarkTools:
             from swiss_ip_mcp.server import TrademarkClassInput
             params = TrademarkClassInput(nice_class=41)
             result_str = await swiss_ip_search_trademarks_by_class(params)
-            result = json.loads(result_str)
+            result = result_str.model_dump(exclude_none=True)
             assert result["nice_class_searched"] == 41
 
 
@@ -304,7 +298,7 @@ class TestPatentTools:
             from swiss_ip_mcp.server import PatentSearchInput
             params = PatentSearchInput(query="solar*")
             result_str = await swiss_ip_search_patents(params)
-            result = json.loads(result_str)
+            result = result_str.model_dump(exclude_none=True)
             assert "count" in result
 
     @pytest.mark.asyncio
@@ -314,7 +308,7 @@ class TestPatentTools:
             from swiss_ip_mcp.server import PatentNumberInput
             params = PatentNumberInput(patent_number="CH000000")
             result_str = await swiss_ip_get_patent(params)
-            result = json.loads(result_str)
+            result = result_str.model_dump(exclude_none=True)
             assert result["match_type"] == "none"
             assert result["count"] == 0
             assert "nicht gefunden" in result["message"].lower()
@@ -326,7 +320,7 @@ class TestPatentTools:
             from swiss_ip_mcp.server import PatentApplicantInput
             params = PatentApplicantInput(applicant_name="ABB*")
             result_str = await swiss_ip_search_patents_by_applicant(params)
-            result = json.loads(result_str)
+            result = result_str.model_dump(exclude_none=True)
             assert "count" in result
 
     @pytest.mark.asyncio
@@ -336,7 +330,7 @@ class TestPatentTools:
             from swiss_ip_mcp.server import PatentSearchInput
             params = PatentSearchInput(query="battery*")
             result_str = await swiss_ip_search_patent_publications(params)
-            result = json.loads(result_str)
+            result = result_str.model_dump(exclude_none=True)
             assert "count" in result
 
 
@@ -348,7 +342,7 @@ class TestSpcTools:
             from swiss_ip_mcp.server import SpcSearchInput
             params = SpcSearchInput(query="Novartis")
             result_str = await swiss_ip_search_spc(params)
-            result = json.loads(result_str)
+            result = result_str.model_dump(exclude_none=True)
             assert "count" in result
 
 
@@ -364,7 +358,7 @@ class TestCrossDomainTools:
                 date_to="2025-02-01",
             )
             result_str = await swiss_ip_search_recent_filings(params)
-            result = json.loads(result_str)
+            result = result_str.model_dump(exclude_none=True)
             assert result["date_range"]["ip_type"] == "trademark"
 
     @pytest.mark.asyncio
@@ -378,7 +372,7 @@ class TestCrossDomainTools:
                 date_to="2025-07-01",
             )
             result_str = await swiss_ip_search_recent_filings(params)
-            result = json.loads(result_str)
+            result = result_str.model_dump(exclude_none=True)
             assert result["date_range"]["from"] == "2025-06-01"
 
     @pytest.mark.asyncio
@@ -386,7 +380,7 @@ class TestCrossDomainTools:
         root = _make_root(SAMPLE_QUOTA_XML)
         with patch("swiss_ip_mcp.server._call_api", new=AsyncMock(return_value=root)):
             result_str = await swiss_ip_get_quota()
-            result = json.loads(result_str)
+            result = result_str.model_dump(exclude_none=True)
             assert result  # non-empty dict
 
 
@@ -685,62 +679,50 @@ class TestTelemetry:
 
 
 # ---------------------------------------------------------------------------
-# Unit tests – response_format rendering (SDK-003)
+# Unit tests – typed response models (SDK-002)
 # ---------------------------------------------------------------------------
 
-class TestResponseFormat:
-    def test_render_json_is_parseable(self):
-        from swiss_ip_mcp.server import ResponseFormat, _render
-
-        out = _render({"count": 1, "results": [{"a": "b"}]}, ResponseFormat.JSON)
-        assert json.loads(out)["count"] == 1
-
-    def test_render_markdown_has_headers_fields_and_source(self):
-        from swiss_ip_mcp.server import DATA_SOURCE, ResponseFormat, _render
-
-        payload = {
-            "source": DATA_SOURCE,
-            "total": "42",
-            "count": 1,
-            "results": [{"MarkName": "ZÜRITEST", "Status": "Registered"}],
-            "next_page_token": "tok123",
-        }
-        out = _render(payload, ResponseFormat.MARKDOWN)
-        assert out.startswith("## Ergebnisse (1 von 42)")
-        assert "**MarkName:** ZÜRITEST" in out
-        assert "tok123" in out
-        # source provenance footer, but the raw source dict is not dumped inline
-        assert "_Quelle: Swissreg" in out
-        assert "**source:**" not in out
-        # not JSON
-        with pytest.raises(json.JSONDecodeError):
-            json.loads(out)
-
-    def test_render_markdown_error(self):
-        from swiss_ip_mcp.server import ResponseFormat, _render
-
-        out = _render({"error": "kaputt"}, ResponseFormat.MARKDOWN)
-        assert out == "**Fehler:** kaputt"
-
+class TestTypedReturns:
     @pytest.mark.asyncio
-    async def test_tool_honours_markdown_format(self):
+    async def test_search_returns_typed_envelope(self):
+        from swiss_ip_mcp.server import SearchEnvelope, TrademarkSearchInput
+
         root = _make_root(SAMPLE_TM_XML)
         with patch("swiss_ip_mcp.server._call_api", new=AsyncMock(return_value=root)):
-            from swiss_ip_mcp.server import ResponseFormat, TrademarkSearchInput
-            params = TrademarkSearchInput(
-                query="ZÜRITEST", response_format=ResponseFormat.MARKDOWN
-            )
-            out = await swiss_ip_search_trademarks(params)
-            assert out.lstrip().startswith("## Ergebnisse")
+            result = await swiss_ip_search_trademarks(TrademarkSearchInput(query="x"))
+        assert isinstance(result, SearchEnvelope)
+        assert result.count == 2
+        assert result.match_type == "exact"
+        assert result.source.name.startswith("Swissreg")
 
     @pytest.mark.asyncio
-    async def test_tool_default_format_is_json(self):
+    async def test_quota_returns_typed_envelope(self):
+        from swiss_ip_mcp.server import QuotaEnvelope
+
+        root = _make_root(SAMPLE_QUOTA_XML)
+        with patch("swiss_ip_mcp.server._call_api", new=AsyncMock(return_value=root)):
+            result = await swiss_ip_get_quota()
+        assert isinstance(result, QuotaEnvelope)
+        assert result.source.provider.startswith("Swiss Federal Institute")
+
+    @pytest.mark.asyncio
+    async def test_tools_expose_output_schema(self):
+        from swiss_ip_mcp.server import mcp
+
+        tools = {t.name: t for t in await mcp.list_tools()}
+        assert tools["swiss_ip_search_trademarks"].outputSchema is not None
+        assert tools["swiss_ip_get_quota"].outputSchema is not None
+
+    @pytest.mark.asyncio
+    async def test_exclude_none_drops_optional_fields(self):
+        from swiss_ip_mcp.server import TrademarkSearchInput
+
         root = _make_root(SAMPLE_TM_XML)
         with patch("swiss_ip_mcp.server._call_api", new=AsyncMock(return_value=root)):
-            from swiss_ip_mcp.server import TrademarkSearchInput
-            params = TrademarkSearchInput(query="ZÜRITEST")  # no explicit format
-            out = await swiss_ip_search_trademarks(params)
-            assert json.loads(out)["count"] == 2  # still JSON by default
+            result = await swiss_ip_search_trademarks(TrademarkSearchInput(query="x"))
+        dumped = result.model_dump(exclude_none=True)
+        assert "suggestion" not in dumped  # only present on empty results
+        assert "message" not in dumped
 
 
 # ---------------------------------------------------------------------------
@@ -1026,9 +1008,7 @@ class TestRespxHttpPath:
                 return_value=httpx.Response(200, content=SAMPLE_TM_XML.encode("utf-8"))
             )
             from swiss_ip_mcp.server import TrademarkSearchInput
-            result = json.loads(
-                await srv.swiss_ip_search_trademarks(TrademarkSearchInput(query="x"))
-            )
+            result = (await srv.swiss_ip_search_trademarks(TrademarkSearchInput(query="x"))).model_dump(exclude_none=True)
 
         assert result["count"] == 2
         assert result["source"]["name"].startswith("Swissreg")
@@ -1070,7 +1050,7 @@ class TestLiveApi:
         from swiss_ip_mcp.server import TrademarkSearchInput
         params = TrademarkSearchInput(query="Zürich*", page_size=3)
         result_str = await swiss_ip_search_trademarks(params)
-        result = json.loads(result_str)
+        result = result_str.model_dump(exclude_none=True)
         assert "error" not in result
         assert result["count"] > 0
 
@@ -1079,7 +1059,7 @@ class TestLiveApi:
         from swiss_ip_mcp.server import PatentSearchInput
         params = PatentSearchInput(query="Roche*", page_size=3)
         result_str = await swiss_ip_search_patents(params)
-        result = json.loads(result_str)
+        result = result_str.model_dump(exclude_none=True)
         assert "error" not in result
 
     @pytest.mark.asyncio
@@ -1087,11 +1067,11 @@ class TestLiveApi:
         from swiss_ip_mcp.server import SpcSearchInput
         params = SpcSearchInput(query="Novartis*", page_size=3)
         result_str = await swiss_ip_search_spc(params)
-        result = json.loads(result_str)
+        result = result_str.model_dump(exclude_none=True)
         assert "error" not in result
 
     @pytest.mark.asyncio
     async def test_live_quota(self):
         result_str = await swiss_ip_get_quota()
-        result = json.loads(result_str)
+        result = result_str.model_dump(exclude_none=True)
         assert "error" not in result
