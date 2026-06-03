@@ -1,2 +1,2 @@
 server_name,audit_status,findings,last_audit_run,last_audit_at,production_ready,released_version,notes
-swiss-ip-mcp,Abgeschlossen,3,,,True,,
+swiss-ip-mcp,Abgeschlossen,0,,,True,,
