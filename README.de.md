@@ -1,10 +1,15 @@
-# swiss-ip-mcp
+🇨🇭 **Teil des [Swiss Public Data MCP Portfolios](https://github.com/malkreide/swiss-public-data-mcp)**
+
+# 💡 swiss-ip-mcp
 
 **MCP-Server für Schweizer Immaterialgüterrechts-Daten (IGE/IPI)**
 
-[![CI](https://github.com/malkreide/swiss-ip-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/malkreide/swiss-ip-mcp/actions)
-[![Python](https://img.shields.io/badge/python-3.11%2B-blue)](https://www.python.org)
+![Version](https://img.shields.io/badge/version-1.1.1-blue)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+[![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
+[![MCP](https://img.shields.io/badge/MCP-Model%20Context%20Protocol-purple)](https://modelcontextprotocol.io/)
+[![Data Source](https://img.shields.io/badge/Data-swissreg.ch-red)](https://www.swissreg.ch/public/apidocs/)
+[![CI](https://github.com/malkreide/swiss-ip-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/malkreide/swiss-ip-mcp/actions)
 
 🇬🇧 [English version → README.md](README.md)
 
@@ -335,6 +340,18 @@ Alle Daten stammen aus der [IGE/IPI Swissreg Datadelivery API](https://www.swiss
 
 ---
 
+## Sicherheit
+
+Siehe [`SECURITY.md`](SECURITY.md) für die Sicherheitslage, eine Zusammenfassung der Härtungsmassnahmen und das Vorgehen zur Meldung von Schwachstellen ([deutsche Version](SECURITY.de.md)).
+
+---
+
 ## Lizenz
 
-MIT © 2026 malkreide
+MIT-Lizenz — siehe [LICENSE](LICENSE)
+
+---
+
+**Autor**
+
+Hayal Oezkan · [malkreide](https://github.com/malkreide)

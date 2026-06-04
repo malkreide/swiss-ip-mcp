@@ -5,6 +5,17 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+- **`SECURITY.md` / `SECURITY.de.md`**: a bilingual security policy documenting
+  the security posture, hardening summary, vulnerability reporting, and the
+  portfolio-level accepted risks (SEC-014 / SEC-015). Linked from both READMEs.
+
+### Changed
+- **Documentation alignment with the Swiss Public Data MCP Portfolio**: READMEs
+  now lead with the portfolio banner, an emoji title, and the standard badge row;
+  the portfolio links in `CONTRIBUTING` point to the portfolio landing repo.
+- **License copyright holder** corrected to `Hayal Oezkan` (LICENSE + READMEs).
+
 ## [1.1.1] - 2026-06-03
 
 Closes the last three (non-blocking) audit partials. Confirming re-audit

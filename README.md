@@ -1,10 +1,15 @@
-# swiss-ip-mcp
+🇨🇭 **Part of the [Swiss Public Data MCP Portfolio](https://github.com/malkreide/swiss-public-data-mcp)**
+
+# 💡 swiss-ip-mcp
 
 **MCP Server for Swiss Intellectual Property Data (IGE/IPI)**
 
-[![CI](https://github.com/malkreide/swiss-ip-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/malkreide/swiss-ip-mcp/actions)
-[![Python](https://img.shields.io/badge/python-3.11%2B-blue)](https://www.python.org)
+![Version](https://img.shields.io/badge/version-1.1.1-blue)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+[![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
+[![MCP](https://img.shields.io/badge/MCP-Model%20Context%20Protocol-purple)](https://modelcontextprotocol.io/)
+[![Data Source](https://img.shields.io/badge/Data-swissreg.ch-red)](https://www.swissreg.ch/public/apidocs/)
+[![CI](https://github.com/malkreide/swiss-ip-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/malkreide/swiss-ip-mcp/actions)
 
 🇩🇪 [Deutsche Version → README.de.md](README.de.md)
 
@@ -344,6 +349,18 @@ URL, license) so downstream consumers retain attribution. The result envelope is
 
 ---
 
+## Security
+
+See [`SECURITY.md`](SECURITY.md) for the security posture, hardening summary, and how to report a vulnerability.
+
+---
+
 ## License
 
-MIT © 2026 malkreide
+MIT License — see [LICENSE](LICENSE)
+
+---
+
+**Author**
+
+Hayal Oezkan · [malkreide](https://github.com/malkreide)
