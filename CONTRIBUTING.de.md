@@ -1,6 +1,6 @@
 # Beitragen zu swiss-ip-mcp
 
-Danke für dein Interesse, zu diesem Projekt beizutragen! Dieser MCP-Server ist Teil des [Swiss Public Data MCP Portfolios](https://github.com/malkreide) und folgt den gemeinsamen Konventionen des Portfolios.
+Danke für dein Interesse, zu diesem Projekt beizutragen! Dieser MCP-Server ist Teil des [Swiss Public Data MCP Portfolios](https://github.com/malkreide/swiss-public-data-mcp) und folgt den gemeinsamen Konventionen des Portfolios.
 
 [English Version](CONTRIBUTING.md)
 

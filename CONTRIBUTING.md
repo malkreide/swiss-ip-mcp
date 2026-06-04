@@ -1,6 +1,6 @@
 # Contributing to swiss-ip-mcp
 
-Thank you for your interest in contributing to this project! This MCP server is part of the [Swiss Public Data MCP Portfolio](https://github.com/malkreide) and follows shared conventions across the portfolio.
+Thank you for your interest in contributing to this project! This MCP server is part of the [Swiss Public Data MCP Portfolio](https://github.com/malkreide/swiss-public-data-mcp) and follows shared conventions across the portfolio.
 
 [Deutsche Version](CONTRIBUTING.de.md)
 
