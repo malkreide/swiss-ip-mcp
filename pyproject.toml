@@ -50,6 +50,7 @@ dev = [
 swiss-ip-mcp = "swiss_ip_mcp.server:main"
 
 [project.urls]
+"mcp-name" = "io.github.malkreide/swiss-ip-mcp"
 Homepage = "https://github.com/malkreide/swiss-ip-mcp"
 Repository = "https://github.com/malkreide/swiss-ip-mcp"
 "Bug Tracker" = "https://github.com/malkreide/swiss-ip-mcp/issues"
