@@ -364,3 +364,5 @@ MIT License — see [LICENSE](LICENSE)
 **Author**
 
 Hayal Oezkan · [malkreide](https://github.com/malkreide)
+
+<!-- mcp-name: io.github.malkreide/swiss-ip-mcp -->
