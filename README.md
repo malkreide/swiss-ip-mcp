@@ -366,3 +366,28 @@ MIT License — see [LICENSE](LICENSE)
 Hayal Oezkan · [malkreide](https://github.com/malkreide)
 
 <!-- mcp-name: io.github.malkreide/swiss-ip-mcp -->
+
+<!-- BEGIN GENERATED: install -->
+## Installation
+
+Run via [`uv`](https://docs.astral.sh/uv/)'s `uvx` — no clone or manual install needed. Add to your MCP client config (`mcpServers` for Claude Desktop, Cursor and Windsurf; use a top-level `servers` key for VS Code in `.vscode/mcp.json`):
+
+```json
+{
+  "mcpServers": {
+    "swiss-ip-mcp": {
+      "command": "uvx",
+      "args": [
+        "swiss-ip-mcp"
+      ],
+      "env": {
+        "IGE_USERNAME": "<your IGE_USERNAME>",
+        "IGE_PASSWORD": "<your IGE_PASSWORD>"
+      }
+    }
+  }
+}
+```
+
+Requires credentials: set `IGE_USERNAME`, `IGE_PASSWORD` (replace the placeholder values above).
+<!-- END GENERATED: install -->
