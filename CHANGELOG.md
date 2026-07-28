@@ -5,6 +5,15 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Fixed
+
+- **Declared `mcp` explicitly and capped it at `<2`.** This server imports
+  `mcp.server.fastmcp`, but never declared `mcp` — it arrived transitively via
+  `fastmcp`. `mcp` 2.0.0, published 2026-07-28, removed that module, and the
+  only reason installs still work today is an upper bound inside `fastmcp-slim`,
+  a package this project never names. The dependency that is actually imported
+  is now declared and bounded here rather than left to someone else's resolver.
+
 ### Added
 - **`SECURITY.md` / `SECURITY.de.md`**: a bilingual security policy documenting
   the security posture, hardening summary, vulnerability reporting, and the
