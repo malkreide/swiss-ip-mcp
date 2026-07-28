@@ -349,6 +349,13 @@ URL, license) so downstream consumers retain attribution. The result envelope is
 
 ---
 
+## Contributing
+
+See [`CONTRIBUTING.md`](CONTRIBUTING.md) ([Deutsch](CONTRIBUTING.de.md)) for how to
+report bugs and submit changes.
+
+---
+
 ## Security
 
 See [`SECURITY.md`](SECURITY.md) for the security posture, hardening summary, and how to report a vulnerability.
@@ -361,9 +368,9 @@ MIT License — see [LICENSE](LICENSE)
 
 ---
 
-**Author**
+## Author
 
-Hayal Oezkan · [malkreide](https://github.com/malkreide)
+**Hayal Oezkan** · [github.com/malkreide](https://github.com/malkreide)
 
 <!-- mcp-name: io.github.malkreide/swiss-ip-mcp -->
 

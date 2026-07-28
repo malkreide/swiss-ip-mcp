@@ -340,6 +340,13 @@ Alle Daten stammen aus der [IGE/IPI Swissreg Datadelivery API](https://www.swiss
 
 ---
 
+## Mitwirken
+
+Siehe [`CONTRIBUTING.de.md`](CONTRIBUTING.de.md) ([English](CONTRIBUTING.md)) für
+das Melden von Fehlern und das Einreichen von Änderungen.
+
+---
+
 ## Sicherheit
 
 Siehe [`SECURITY.md`](SECURITY.md) für die Sicherheitslage, eine Zusammenfassung der Härtungsmassnahmen und das Vorgehen zur Meldung von Schwachstellen ([deutsche Version](SECURITY.de.md)).
@@ -352,6 +359,6 @@ MIT-Lizenz — siehe [LICENSE](LICENSE)
 
 ---
 
-**Autor**
+## Autor
 
-Hayal Oezkan · [malkreide](https://github.com/malkreide)
+**Hayal Oezkan** · [github.com/malkreide](https://github.com/malkreide)
