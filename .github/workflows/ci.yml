@@ -37,3 +37,6 @@ jobs:
           else
             echo "No tests directory found, skipping."
           fi
+
+      - name: Versions-Sync (pyproject ↔ server.json / README / src)
+        run: python scripts/check_version_sync.py
