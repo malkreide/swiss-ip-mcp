@@ -243,9 +243,9 @@ class TestTrademarkTools:
 
     @pytest.mark.asyncio
     async def test_search_trademarks_api_error_raises(self):
-        # OBS-001: execution errors raise → FastMCP returns isError=true.
+        # OBS-001: execution errors raise → MCPServer returns isError=true.
         import httpx
-        from mcp.server.fastmcp.exceptions import ToolError
+        from mcp.server.mcpserver.exceptions import ToolError
         err = httpx.HTTPStatusError(
             "401", request=MagicMock(), response=MagicMock(status_code=401)
         )
@@ -465,7 +465,7 @@ class TestStructuredLogging:
     async def test_unexpected_error_logged_at_error_level(self):
         import structlog
 
-        from mcp.server.fastmcp.exceptions import ToolError
+        from mcp.server.mcpserver.exceptions import ToolError
         with structlog.testing.capture_logs() as logs:
             with patch(
                 "swiss_ip_mcp.server._call_api",
@@ -485,67 +485,60 @@ class TestStructuredLogging:
 # ---------------------------------------------------------------------------
 
 class TestMcpErrorSemantics:
+    """OBS-001 end-to-end via the public in-process client.
+
+    These used to reach into ``mcp._mcp_server.request_handlers``. mcp 2.x
+    dispatches through handlers passed at construction and the lowlevel
+    ``Server`` exposes no ``request_handlers`` mapping, so the same behaviour
+    is now asserted over a real client session — which is what actually
+    matters, and does not depend on SDK internals.
+    """
+
     @pytest.mark.asyncio
     async def test_served_execution_error_sets_is_error(self):
-        # OBS-001 end-to-end: through the lowlevel handler a failing tool yields
-        # a CallToolResult with isError=true (execution error, not protocol error).
         import httpx
-        from mcp.types import CallToolRequest, CallToolRequestParams
+        from mcp.client import Client
 
         from swiss_ip_mcp.server import mcp
 
         err = httpx.HTTPStatusError(
             "500", request=MagicMock(), response=MagicMock(status_code=500)
         )
-        handler = mcp._mcp_server.request_handlers[CallToolRequest]
-        req = CallToolRequest(
-            method="tools/call",
-            params=CallToolRequestParams(
-                name="swiss_ip_search_trademarks", arguments={"params": {"query": "x"}}
-            ),
-        )
         with patch("swiss_ip_mcp.server._call_api", new=AsyncMock(side_effect=err)):
-            result = (await handler(req)).root
-        assert result.isError is True
-        # masked, no stack trace / upstream body in the surfaced text
+            async with Client(mcp) as client:
+                result = await client.call_tool(
+                    "swiss_ip_search_trademarks", {"params": {"query": "x"}}
+                )
+        assert result.is_error is True
+        # masked: no stack trace / upstream body in the surfaced text
         text = result.content[0].text
         assert "Server-Log" in text
         assert "Traceback" not in text
 
     @pytest.mark.asyncio
     async def test_served_success_is_not_error(self):
-        from mcp.types import CallToolRequest, CallToolRequestParams
+        from mcp.client import Client
 
         from swiss_ip_mcp.server import mcp
 
         root = _make_root(SAMPLE_TM_XML)
-        handler = mcp._mcp_server.request_handlers[CallToolRequest]
-        req = CallToolRequest(
-            method="tools/call",
-            params=CallToolRequestParams(
-                name="swiss_ip_search_trademarks", arguments={"params": {"query": "x"}}
-            ),
-        )
         with patch("swiss_ip_mcp.server._call_api", new=AsyncMock(return_value=root)):
-            result = (await handler(req)).root
-        assert result.isError is False
+            async with Client(mcp) as client:
+                result = await client.call_tool(
+                    "swiss_ip_search_trademarks", {"params": {"query": "x"}}
+                )
+        assert result.is_error is False
 
     @pytest.mark.asyncio
     async def test_protocol_error_on_invalid_args(self):
-        # Protocol-error path: invalid arguments do not reach the handler body.
-        from mcp.types import CallToolRequest, CallToolRequestParams
+        """Schema-invalid arguments are rejected before the tool body runs."""
+        from mcp.client import Client
 
         from swiss_ip_mcp.server import mcp
 
-        handler = mcp._mcp_server.request_handlers[CallToolRequest]
-        req = CallToolRequest(
-            method="tools/call",
-            params=CallToolRequestParams(
-                name="swiss_ip_search_trademarks", arguments={}  # missing 'query'
-            ),
-        )
-        result = (await handler(req)).root
-        assert result.isError is True
+        async with Client(mcp) as client:
+            result = await client.call_tool("swiss_ip_search_trademarks", {})
+        assert result.is_error is True
 
 
 class TestMcpPrimitives:
@@ -664,7 +657,7 @@ class TestTelemetry:
             err = httpx.HTTPStatusError(
                 "500", request=MagicMock(), response=MagicMock(status_code=500)
             )
-            from mcp.server.fastmcp.exceptions import ToolError
+            from mcp.server.mcpserver.exceptions import ToolError
             with patch("swiss_ip_mcp.server._call_api", new=AsyncMock(side_effect=err)):
                 from swiss_ip_mcp.server import TrademarkSearchInput
                 with pytest.raises(ToolError):
@@ -710,8 +703,8 @@ class TestTypedReturns:
         from swiss_ip_mcp.server import mcp
 
         tools = {t.name: t for t in await mcp.list_tools()}
-        assert tools["swiss_ip_search_trademarks"].outputSchema is not None
-        assert tools["swiss_ip_get_quota"].outputSchema is not None
+        assert tools["swiss_ip_search_trademarks"].output_schema is not None
+        assert tools["swiss_ip_get_quota"].output_schema is not None
 
     @pytest.mark.asyncio
     async def test_exclude_none_drops_optional_fields(self):
@@ -1069,7 +1062,7 @@ class TestRespxHttpPath:
     async def test_http_401_surfaces_as_tool_error(self, monkeypatch):
         import httpx
         import respx
-        from mcp.server.fastmcp.exceptions import ToolError
+        from mcp.server.mcpserver.exceptions import ToolError
 
         import swiss_ip_mcp.server as srv
 

@@ -31,11 +31,14 @@ def fingerprint_tool(tool: Any) -> str:
     """
     annotations = None
     if getattr(tool, "annotations", None) is not None:
-        annotations = tool.annotations.model_dump(mode="json")
+        # by_alias keeps the wire spelling (readOnlyHint, ...): mcp_types 2.x
+        # renamed the Python fields to snake_case, and a bare dump would
+        # silently change this manifest hash without any contract change.
+        annotations = tool.annotations.model_dump(mode="json", by_alias=True)
     payload = {
         "name": tool.name,
         "description": inspect.cleandoc(tool.description or ""),
-        "inputSchema": tool.inputSchema,
+        "inputSchema": tool.input_schema,
         "annotations": annotations,
     }
     blob = json.dumps(payload, sort_keys=True, ensure_ascii=False).encode("utf-8")
