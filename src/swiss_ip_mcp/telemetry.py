@@ -66,7 +66,7 @@ def traced_tool(func: _F) -> _F:
     (OBS-003), so every log line emitted during the call is correlated. No
     arguments are logged (no PII).
 
-    `functools.wraps` keeps the original signature so FastMCP's input-schema
+    `functools.wraps` keeps the original signature so MCPServer's input-schema
     introspection is unaffected.
     """
 

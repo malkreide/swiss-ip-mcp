@@ -23,8 +23,8 @@ from typing import Any, Literal, Optional
 from urllib.parse import urlparse
 
 import httpx
-from mcp.server.fastmcp import Context, FastMCP
-from mcp.server.fastmcp.exceptions import ToolError
+from mcp.server.mcpserver import Context, MCPServer
+from mcp.server.mcpserver.exceptions import ToolError
 from mcp.server.transport_security import TransportSecuritySettings
 from pydantic import BaseModel, ConfigDict, Field, SecretStr
 
@@ -107,7 +107,7 @@ def _get_client() -> httpx.AsyncClient:
 
 
 @asynccontextmanager
-async def _lifespan(_server: FastMCP) -> AsyncIterator[dict]:
+async def _lifespan(_server: MCPServer) -> AsyncIterator[dict]:
     """Server lifespan: own the pooled HTTP client for the whole process.
 
     Shared by all transports (stdio + Streamable HTTP / SSE), so there is no
@@ -534,7 +534,7 @@ def _transport_security() -> Optional[TransportSecuritySettings]:
 # ---------------------------------------------------------------------------
 # MCP Server
 # ---------------------------------------------------------------------------
-mcp = FastMCP(
+mcp = MCPServer(
     "swiss_ip_mcp",
     instructions=(
         "Swiss IP MCP Server provides access to Swiss intellectual property "
@@ -544,12 +544,8 @@ mcp = FastMCP(
         "IGE_PASSWORD environment variables (free after signing IGE usage terms)."
     ),
     lifespan=_lifespan,
-    host=_env_host(),
-    port=_env_port(),
-    transport_security=_transport_security(),
     # Stateless HTTP removes per-session server state, so horizontally scaled
     # replicas need no session affinity (SCALE-002/003). Opt-in via env.
-    stateless_http=_env_bool("MCP_STATELESS_HTTP"),
 )
 
 # ---------------------------------------------------------------------------
@@ -1297,7 +1293,19 @@ def _build_http_app(transport: str):
     """
     from starlette.middleware.cors import CORSMiddleware
 
-    app = mcp.sse_app() if transport == "sse" else mcp.streamable_http_app()
+    # mcp 2.x: host and transport_security are per-app kwargs; they were
+    # constructor arguments (backed by settings) under 1.x.
+    security = _transport_security()
+    app = (
+        mcp.sse_app(transport_security=security, host=_env_host())
+        if transport == "sse"
+        else mcp.streamable_http_app(
+            transport_security=security,
+            host=_env_host(),
+            # mcp 2.x: stateless mode is a property of the app being built.
+            stateless_http=_env_bool("MCP_STATELESS_HTTP"),
+        )
+    )
 
     # Health check for HEALTHCHECK / k8s probes / LB backend health (SCALE-002).
     app.add_route("/health", _health, methods=["GET"])
@@ -1320,7 +1328,7 @@ def _build_http_app(transport: str):
 def _run_http(transport: str) -> None:
     """Serve over Streamable HTTP or SSE with CORS configured (SDK-004).
 
-    Builds the ASGI app from the FastMCP instance and runs it under uvicorn on
+    Builds the ASGI app from the MCPServer instance and runs it under uvicorn on
     the configured host/port, so binding is explicit and controllable (SEC-016).
     """
     import uvicorn
