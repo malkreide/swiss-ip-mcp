@@ -31,6 +31,12 @@ from pydantic import BaseModel, ConfigDict, Field, SecretStr
 from swiss_ip_mcp.logging_config import get_logger, setup_logging
 from swiss_ip_mcp.telemetry import setup_telemetry, traced_tool
 
+from . import __version__
+
+# Wer fragt hier an? Ohne eigenen User-Agent geht der httpx-Default
+# hinaus und der Betreiber der Datenquelle sieht bloss eine Bibliothek.
+# Die Version stammt aus den Paket-Metadaten und kann nicht driften.
+USER_AGENT = f"swiss-ip-mcp/{__version__} (+https://github.com/malkreide/swiss-ip-mcp)"
 # ---------------------------------------------------------------------------
 # Logging (structured JSON on stderr — OBS-003)
 # ---------------------------------------------------------------------------
@@ -102,7 +108,7 @@ def _get_client() -> httpx.AsyncClient:
     """Return the shared AsyncClient, creating it once on first use."""
     global _client
     if _client is None or _client.is_closed:
-        _client = httpx.AsyncClient(timeout=REQUEST_TIMEOUT)
+        _client = httpx.AsyncClient(timeout=REQUEST_TIMEOUT, headers={"User-Agent": USER_AGENT})
     return _client
 
 
