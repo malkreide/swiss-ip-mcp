@@ -46,9 +46,7 @@ logger = get_logger("swiss_ip_mcp")
 # ---------------------------------------------------------------------------
 # Constants
 # ---------------------------------------------------------------------------
-IDP_TOKEN_URL = (
-    "https://idp.ipi.ch/auth/realms/egov/protocol/openid-connect/token"
-)
+IDP_TOKEN_URL = "https://idp.ipi.ch/auth/realms/egov/protocol/openid-connect/token"
 API_ENDPOINT = "https://www.swissreg.ch/public/api/v1"
 CLIENT_ID = "datadelivery-api-client"
 
@@ -74,6 +72,7 @@ def _assert_host_allowed(url: str) -> None:
     if host not in ALLOWED_EGRESS_HOSTS:
         raise ValueError(f"Egress zu nicht erlaubtem Host blockiert: {host!r}")
 
+
 # Provenance attached to every tool response (CH-004 / SDK-002). All data is
 # served by the IGE/IPI Swissreg Datadelivery API under its terms of use.
 DATA_SOURCE = {
@@ -81,10 +80,7 @@ DATA_SOURCE = {
     "provider": "Swiss Federal Institute of Intellectual Property (IGE/IPI)",
     "url": "https://www.swissreg.ch/public/apidocs/",
     "license": "IGE/IPI Swissreg Datadelivery API Terms of Use",
-    "license_url": (
-        "https://www.ige.ch/en/services/digital-resources/ip-data/"
-        "data-delivery-api"
-    ),
+    "license_url": ("https://www.ige.ch/en/services/digital-resources/ip-data/data-delivery-api"),
 }
 
 # ---------------------------------------------------------------------------
@@ -212,6 +208,7 @@ async def _call_api(xml_body: str, ctx: Optional[Context] = None) -> ET.Element:
 # XML helpers
 # ---------------------------------------------------------------------------
 
+
 def _esc(text: str) -> str:
     """XML-escape a string for safe inclusion in the request body."""
     return saxutils.escape(str(text))
@@ -318,6 +315,7 @@ def _quota_request() -> str:
 # Response parsers (generic namespace-aware helpers)
 # ---------------------------------------------------------------------------
 
+
 def _find_all(root: ET.Element, local: str) -> list[ET.Element]:
     """Find all elements with a given local name, ignoring namespace."""
     return [el for el in root.iter() if _local(el.tag) == local]
@@ -408,32 +406,22 @@ def _handle_error(e: Exception) -> str:
         status = e.response.status_code
         logger.warning("api_http_error", status=status, exc_info=True)
         if status == 401:
-            return (
-                "Fehler 401: Authentifizierung fehlgeschlagen. "
-                "Bitte IGE_USERNAME und IGE_PASSWORD prüfen."
-            )
+            return "Fehler 401: Authentifizierung fehlgeschlagen. Bitte IGE_USERNAME und IGE_PASSWORD prüfen."
         if status == 403:
             return (
-                "Fehler 403: Zugriff verweigert. Möglicherweise fehlt der API-Zugang. "
-                "Bitte Nutzungsbedingungen prüfen."
+                "Fehler 403: Zugriff verweigert. Möglicherweise fehlt der API-Zugang. Bitte Nutzungsbedingungen prüfen."
             )
         if status == 429:
             return (
                 "Fehler 429: Rate-Limit / Kontingent überschritten. "
                 "Mit swiss_ip_get_quota das verbleibende Kontingent prüfen."
             )
-        return (
-            f"API-Fehler {status}: Die Anfrage an die Swissreg-API ist "
-            "fehlgeschlagen. Details stehen im Server-Log."
-        )
+        return f"API-Fehler {status}: Die Anfrage an die Swissreg-API ist fehlgeschlagen. Details stehen im Server-Log."
     if isinstance(e, httpx.TimeoutException):
         logger.warning("api_timeout")
         return "Fehler: Anfrage hat das Timeout überschritten. Bitte erneut versuchen."
     logger.error("unexpected_error", error_type=type(e).__name__, exc_info=True)
-    return (
-        "Unerwarteter Fehler bei der Verarbeitung der Anfrage. "
-        "Details stehen im Server-Log."
-    )
+    return "Unerwarteter Fehler bei der Verarbeitung der Anfrage. Details stehen im Server-Log."
 
 
 # ---------------------------------------------------------------------------
@@ -443,8 +431,7 @@ def _handle_error(e: Exception) -> str:
 MatchType = Literal["exact", "none"]
 
 _NO_MATCH_SUGGESTION = (
-    "Keine Treffer. Suchbegriff mit Wildcard (*) erweitern, die "
-    "Schreibweise prüfen oder den Begriff verkürzen."
+    "Keine Treffer. Suchbegriff mit Wildcard (*) erweitern, die Schreibweise prüfen oder den Begriff verkürzen."
 )
 
 
@@ -487,6 +474,7 @@ class QuotaEnvelope(BaseModel):
 # Transport / network configuration (SCALE-001, SEC-016)
 # ---------------------------------------------------------------------------
 
+
 def _env_host() -> str:
     """Bind host. Defaults to loopback; 0.0.0.0 must be opted into explicitly."""
     return os.getenv("MCP_HOST", "127.0.0.1")
@@ -514,9 +502,7 @@ def _resolve_transport() -> str:
         return "sse"
     if raw in ("http", "streamable-http", "streamable_http"):
         return "streamable-http"
-    raise SystemExit(
-        f"Ungültiger MCP_TRANSPORT={raw!r}. Erlaubt: stdio, sse, streamable-http."
-    )
+    raise SystemExit(f"Ungültiger MCP_TRANSPORT={raw!r}. Erlaubt: stdio, sse, streamable-http.")
 
 
 def _transport_security() -> Optional[TransportSecuritySettings]:
@@ -558,15 +544,13 @@ mcp = MCPServer(
 # Pydantic input models
 # ---------------------------------------------------------------------------
 
+
 class TrademarkSearchInput(BaseModel):
     model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
 
     query: str = Field(
         ...,
-        description=(
-            "Freitext-Suchbegriff. Wildcards (*) möglich. "
-            "Beispiele: 'Zürich*', 'apple', 'Bank*'."
-        ),
+        description=("Freitext-Suchbegriff. Wildcards (*) möglich. Beispiele: 'Zürich*', 'apple', 'Bank*'."),
         min_length=1,
         max_length=200,
     )
@@ -591,10 +575,7 @@ class TrademarkOwnerSearchInput(BaseModel):
 
     owner_name: str = Field(
         ...,
-        description=(
-            "Name des Markeninhabers / Anmelders. "
-            "Wildcards (*) möglich. Beispiel: 'Nestlé*', 'Google*'."
-        ),
+        description=("Name des Markeninhabers / Anmelders. Wildcards (*) möglich. Beispiel: 'Nestlé*', 'Google*'."),
         min_length=1,
         max_length=200,
     )
@@ -607,10 +588,7 @@ class TrademarkNumberInput(BaseModel):
 
     trademark_number: str = Field(
         ...,
-        description=(
-            "Schweizer Marken-Anmelde- oder Registernummer. "
-            "Beispiele: 'P-756123', '756123'."
-        ),
+        description=("Schweizer Marken-Anmelde- oder Registernummer. Beispiele: 'P-756123', '756123'."),
         min_length=1,
         max_length=50,
     )
@@ -659,9 +637,7 @@ class PatentNumberInput(BaseModel):
 
     patent_number: str = Field(
         ...,
-        description=(
-            "Schweizer Patentnummer. Beispiele: 'CH123456', '123456'."
-        ),
+        description=("Schweizer Patentnummer. Beispiele: 'CH123456', '123456'."),
         min_length=1,
         max_length=50,
     )
@@ -673,8 +649,7 @@ class PatentApplicantInput(BaseModel):
     applicant_name: str = Field(
         ...,
         description=(
-            "Name des Patentanmelders oder Erfinders. "
-            "Wildcards (*) möglich. Beispiele: 'ABB*', 'ETH Zürich*'."
+            "Name des Patentanmelders oder Erfinders. Wildcards (*) möglich. Beispiele: 'ABB*', 'ETH Zürich*'."
         ),
         min_length=1,
         max_length=200,
@@ -688,10 +663,7 @@ class DateRangeInput(BaseModel):
 
     ip_type: str = Field(
         ...,
-        description=(
-            "Art des Schutzrechts: 'trademark', 'patent', "
-            "'patent_publication' oder 'spc'."
-        ),
+        description=("Art des Schutzrechts: 'trademark', 'patent', 'patent_publication' oder 'spc'."),
         pattern="^(trademark|patent|patent_publication|spc)$",
     )
     date_from: str = Field(
@@ -728,6 +700,7 @@ class SpcSearchInput(BaseModel):
 # Tools – Trademarks
 # ---------------------------------------------------------------------------
 
+
 @mcp.tool(
     name="swiss_ip_search_trademarks",
     annotations={
@@ -756,9 +729,7 @@ async def swiss_ip_search_trademarks(params: TrademarkSearchInput, ctx: Optional
     """
     sort_dir = "Descending" if params.sort_descending else "Ascending"
     query_xml = f"<Any>{_esc(params.query)}</Any>"
-    xml_body = _build_trademark_search(
-        query_xml, params.page_size, params.page_token, sort_dir=sort_dir
-    )
+    xml_body = _build_trademark_search(query_xml, params.page_size, params.page_token, sort_dir=sort_dir)
     try:
         root = await _call_api(xml_body, ctx)
         result = _parse_result_page(root)
@@ -798,9 +769,7 @@ async def swiss_ip_search_trademarks_by_owner(
     # Trademark owner fields are searched via Any (the API's full-text field
     # covers holder/applicant names in the index).
     query_xml = f"<Any>{_esc(params.owner_name)}</Any>"
-    xml_body = _build_trademark_search(
-        query_xml, params.page_size, params.page_token
-    )
+    xml_body = _build_trademark_search(query_xml, params.page_size, params.page_token)
     try:
         root = await _call_api(xml_body, ctx)
         result = _parse_result_page(root)
@@ -843,8 +812,7 @@ async def swiss_ip_get_trademark(params: TrademarkNumberInput, ctx: Optional[Con
             # execution error — keep isError=false (OBS-001).
             result.suggestion = None
             result.message = (
-                f"Marke '{params.trademark_number}' nicht gefunden. "
-                "Bitte Nummernformat prüfen (z.B. 'P-756123')."
+                f"Marke '{params.trademark_number}' nicht gefunden. Bitte Nummernformat prüfen (z.B. 'P-756123')."
             )
         return result
     except Exception as e:
@@ -883,16 +851,11 @@ async def swiss_ip_search_trademarks_by_class(
     # Combine class filter with optional text query
     class_query = f"<Any>Klasse {params.nice_class}</Any>"
     if params.query:
-        query_xml = (
-            f"<And>{class_query}"
-            f"<Any>{_esc(params.query)}</Any></And>"
-        )
+        query_xml = f"<And>{class_query}<Any>{_esc(params.query)}</Any></And>"
     else:
         query_xml = class_query
 
-    xml_body = _build_trademark_search(
-        query_xml, params.page_size, params.page_token
-    )
+    xml_body = _build_trademark_search(query_xml, params.page_size, params.page_token)
     try:
         root = await _call_api(xml_body, ctx)
         result = _parse_result_page(root)
@@ -905,6 +868,7 @@ async def swiss_ip_search_trademarks_by_class(
 # ---------------------------------------------------------------------------
 # Tools – Patents
 # ---------------------------------------------------------------------------
+
 
 @mcp.tool(
     name="swiss_ip_search_patents",
@@ -934,9 +898,7 @@ async def swiss_ip_search_patents(params: PatentSearchInput, ctx: Optional[Conte
     """
     sort_dir = "Descending" if params.sort_descending else "Ascending"
     query_xml = f"<Any>{_esc(params.query)}</Any>"
-    xml_body = _build_patent_search(
-        query_xml, params.page_size, params.page_token, sort_dir=sort_dir
-    )
+    xml_body = _build_patent_search(query_xml, params.page_size, params.page_token, sort_dir=sort_dir)
     try:
         root = await _call_api(xml_body, ctx)
         result = _parse_result_page(root)
@@ -978,8 +940,7 @@ async def swiss_ip_get_patent(params: PatentNumberInput, ctx: Optional[Context] 
             # Valid empty result, not an execution error (OBS-001).
             result.suggestion = None
             result.message = (
-                f"Patent '{params.patent_number}' nicht gefunden. "
-                "Bitte Format prüfen (z.B. 'CH700123' oder '700123')."
+                f"Patent '{params.patent_number}' nicht gefunden. Bitte Format prüfen (z.B. 'CH700123' oder '700123')."
             )
         return result
     except Exception as e:
@@ -1015,9 +976,7 @@ async def swiss_ip_search_patents_by_applicant(
         str: Ergebnis mit source, total, count, results, next_page_token
     """
     query_xml = f"<Any>{_esc(params.applicant_name)}</Any>"
-    xml_body = _build_patent_search(
-        query_xml, params.page_size, params.page_token
-    )
+    xml_body = _build_patent_search(query_xml, params.page_size, params.page_token)
     try:
         root = await _call_api(xml_body, ctx)
         result = _parse_result_page(root)
@@ -1055,9 +1014,7 @@ async def swiss_ip_search_patent_publications(
         str: Ergebnis mit source, total, count, results, next_page_token
     """
     query_xml = f"<Any>{_esc(params.query)}</Any>"
-    xml_body = _build_patent_pub_search(
-        query_xml, params.page_size, params.page_token
-    )
+    xml_body = _build_patent_pub_search(query_xml, params.page_size, params.page_token)
     try:
         root = await _call_api(xml_body, ctx)
         result = _parse_result_page(root)
@@ -1069,6 +1026,7 @@ async def swiss_ip_search_patent_publications(
 # ---------------------------------------------------------------------------
 # Tools – SPC / ESZ
 # ---------------------------------------------------------------------------
+
 
 @mcp.tool(
     name="swiss_ip_search_spc",
@@ -1109,6 +1067,7 @@ async def swiss_ip_search_spc(params: SpcSearchInput, ctx: Optional[Context] = N
 # Tools – Cross-domain
 # ---------------------------------------------------------------------------
 
+
 @mcp.tool(
     name="swiss_ip_search_recent_filings",
     annotations={
@@ -1137,28 +1096,17 @@ async def swiss_ip_search_recent_filings(params: DateRangeInput, ctx: Optional[C
     Returns:
         str: Ergebnis mit source, total, count, results, next_page_token, date_range
     """
-    query_xml = (
-        f'<LastUpdate from="{_esc(params.date_from)}" '
-        f'to="{_esc(params.date_to)}"/>'
-    )
+    query_xml = f'<LastUpdate from="{_esc(params.date_from)}" to="{_esc(params.date_to)}"/>'
 
     try:
         if params.ip_type == "trademark":
-            xml_body = _build_trademark_search(
-                query_xml, params.page_size, params.page_token
-            )
+            xml_body = _build_trademark_search(query_xml, params.page_size, params.page_token)
         elif params.ip_type == "patent":
-            xml_body = _build_patent_search(
-                query_xml, params.page_size, params.page_token
-            )
+            xml_body = _build_patent_search(query_xml, params.page_size, params.page_token)
         elif params.ip_type == "patent_publication":
-            xml_body = _build_patent_pub_search(
-                query_xml, params.page_size, params.page_token
-            )
+            xml_body = _build_patent_pub_search(query_xml, params.page_size, params.page_token)
         else:  # spc
-            xml_body = _build_spc_search(
-                query_xml, params.page_size, params.page_token
-            )
+            xml_body = _build_spc_search(query_xml, params.page_size, params.page_token)
 
         root = await _call_api(xml_body, ctx)
         result = _parse_result_page(root)
@@ -1239,6 +1187,7 @@ def domains_resource() -> str:
 # Prompts (ARCH-008) — curated workflow templates
 # ---------------------------------------------------------------------------
 
+
 @mcp.prompt(title="Markenverfügbarkeit prüfen")
 def trademark_availability(name: str) -> str:
     """Prüft, ob ein Name als Schweizer Marke registriert ist."""
@@ -1274,6 +1223,7 @@ def recent_ip_filings_report(ip_type: str, date_from: str, date_to: str) -> str:
 # ---------------------------------------------------------------------------
 # Entrypoint
 # ---------------------------------------------------------------------------
+
 
 def _in_container() -> bool:
     """Best-effort detection of a container/orchestrator environment."""

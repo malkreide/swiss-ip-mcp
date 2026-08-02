@@ -12,6 +12,7 @@ from the pinned manifest, forcing an intentional regeneration via
 All tools also share the immutable ``swiss_ip_`` namespace prefix, so they
 cannot be confused with another server's tools.
 """
+
 from __future__ import annotations
 
 import hashlib

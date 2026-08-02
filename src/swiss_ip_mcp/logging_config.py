@@ -8,6 +8,7 @@ correlated.
 
 Log level is taken from the ``LOG_LEVEL`` env var (default ``INFO``).
 """
+
 from __future__ import annotations
 
 import logging
