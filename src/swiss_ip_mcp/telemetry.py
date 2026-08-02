@@ -19,6 +19,7 @@ Enable with either:
   ``OTEL_*`` env vars), or
 * setting ``OTEL_EXPORTER_OTLP_ENDPOINT`` directly.
 """
+
 from __future__ import annotations
 
 import functools
@@ -73,9 +74,7 @@ def traced_tool(func: _F) -> _F:
     @functools.wraps(func)
     async def wrapper(*args, **kwargs):  # type: ignore[no-untyped-def]
         correlation_id = uuid.uuid4().hex
-        structlog.contextvars.bind_contextvars(
-            tool=func.__name__, correlation_id=correlation_id
-        )
+        structlog.contextvars.bind_contextvars(tool=func.__name__, correlation_id=correlation_id)
         with tracer.start_as_current_span(f"mcp.tool/{func.__name__}") as span:
             span.set_attribute("mcp.tool.name", func.__name__)
             span.set_attribute("mcp.tool.result.is_error", False)
