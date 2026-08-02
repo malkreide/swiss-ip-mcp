@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "swiss-ip-mcp"
-version = "1.1.5"
+version = "1.1.6"
 description = "MCP server for Swiss intellectual property data (trademarks, patents, SPC) via the IGE/IPI Swissreg API"
 readme = "README.md"
 license = { file = "LICENSE" }
@@ -32,12 +32,12 @@ dependencies = [
     "httpx>=0.27.0",
     "pydantic>=2.0.0",
     # Imported directly by the HTTP/SSE transport (MCP_TRANSPORT=sse|streamable-http).
-    "starlette>=0.40.0",
+    "starlette>=0.40.0,<2",
     "uvicorn>=0.30.0",
     # Tracing API only — no-op without a provider; SDK/exporter live in the [otel] extra.
     "opentelemetry-api>=1.20.0",
     # Structured JSON logging on stderr (OBS-003).
-    "structlog>=24.1.0",
+    "structlog>=24.1.0,<27",
 ]
 
 [project.optional-dependencies]
