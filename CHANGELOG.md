@@ -5,6 +5,56 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Hinzugefuegt
+
+- **Die Adressliste ist ohne Zugangsdaten geprueft — Ergebnis: Nullbefund.**
+  Jede Adresse, der Keycloak-Realm und der `client_id`, die dieser Server
+  baut, sind die, die die Quelle fuehrt.
+
+  Das ist eine gute Nachricht und steht genau deshalb hier: Ein Nullbefund,
+  den niemand aufgezeichnet hat, ist beim naechsten Durchgang keiner mehr.
+
+  Drei unabhaengige Belege, weil einer nicht getragen haette:
+
+  1. **Der IDP unterscheidet drei Faelle.** `realms/egov` mit falschen
+     Zugangsdaten liefert `invalid_grant` («Invalid user credentials»), ein
+     erfundener Realm 404 «Realm does not exist», ein erfundener `client_id`
+     `invalid_client`. Realm und Client existieren also, und es fehlen nur
+     die Zugangsdaten.
+
+  2. **Der Realm nennt seinen Token-Endpunkt selbst.**
+     `.well-known/openid-configuration` liefert ihn — identisch mit der
+     gebauten URL.
+
+  3. **Die offizielle API-Doku deklariert beide Adressen woertlich**,
+     einschliesslich des `client_id` als «constant string» und
+     `grant_type=password`.
+
+- **Warum es den dritten Beleg braucht.** Die Swissreg-API selbst
+  unterscheidet **nicht**: Ein POST ohne Token gibt HTTP 403, mit erfundenem
+  Token HTTP 401 — und ein frei erfundener Pfad unter `/public/api/` gibt
+  jeweils dasselbe. Ein Statuscode belegt dort nichts.
+
+  Dieselbe Lage gab es bei `epl.bag.admin.ch` im selben Portfolio, und dort
+  wurde aus einem 401 faelschlich «die Route existiert» geschlossen. Der
+  Recorder prueft deshalb bei jedem Lauf mit, dass die Kontrollen noch
+  unterscheiden — und bricht ab, wenn die API anfaengt zu unterscheiden.
+  Auch das waere eine gute Nachricht und trotzdem ein Anlass, neu zu messen.
+
+- **`scripts/record_fixtures.py`, `tests/fixtures/` und `PROVENANCE.md`.** Die
+  Antwort-Payloads sind darin ausdruecklich als **NICHT aufgezeichnet**
+  gefuehrt, mit dem gemessenen Statuscode als Grund — statt ihnen ein Datum
+  anzuschreiben, das sie nie hatten.
+
+  Ausdruecklich offen bleibt damit die **Form** der Antworten: ob die
+  XML-Felder so heissen, wie der Parser sie liest. Genau dort lagen in diesem
+  Portfolio die teuersten Fehler.
+
+- **`tests/test_adressen.py`** — 8 Tests, die **in** der CI laufen.
+  Gegengeprueft mit zwei Rueckmutationen (`CLIENT_ID` und `API_ENDPOINT` auf
+  andere Werte): beide machen die Suite rot.
+
+
 ## [1.1.6] - 2026-08-02
 
 ### Fixed
