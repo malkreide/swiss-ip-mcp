@@ -332,6 +332,12 @@ URL, license) so downstream consumers retain attribution. The result envelope is
 - **Rate limits & quota:** The IGE Swissreg API enforces a monthly data transfer quota per account. Use the `swiss_ip_get_quota` tool to monitor remaining quota. The server enforces a 60s timeout per request. Avoid large `page_size` values (>20) for exploratory queries.
 - **Authentication:** Credentials (`IGE_USERNAME`, `IGE_PASSWORD`) are read from environment variables at runtime and never logged or persisted.
 - **Terms of service:** Data is subject to the [IGE Swissreg Datadelivery API terms of use](https://www.ige.ch/en/services/digital-resources/ip-data/data-delivery-api). A signed usage agreement with IGE/IPI is required before API access is granted.
+- **Address list verified without credentials (2026-08-08).** Every address, the Keycloak realm and the `client_id` this server builds are the ones the source publishes. A null result — and recorded as one, because a null result nobody wrote down is not one on the next pass. Three independent proofs, because one would not have carried:
+  - The IDP discriminates: `realms/egov` with wrong credentials → `invalid_grant` ("Invalid user credentials"); an invented realm → 404 "Realm does not exist"; an invented `client_id` → `invalid_client`. So realm and client exist and only the credentials are missing.
+  - The realm declares its own token endpoint under `.well-known/openid-configuration` — identical to the URL built here.
+  - The official API documentation states both addresses verbatim, including the `client_id` as a "constant string".
+- **Why the third proof is needed:** the Swissreg API itself does **not** discriminate. A POST without a token returns 403, with an invented token 401 — and a freely invented path under `/public/api/` returns exactly the same. A status code proves nothing there. `scripts/record_fixtures.py` re-measures this on every run and aborts if a control stops discriminating.
+- **Response payloads are not recorded.** They need credentials; `PROVENANCE.md` lists them as NOT RECORDED with the measured status rather than giving them a date they never had. What stays unproven is the *shape* of the responses — whether the XML fields are named as the parser reads them.
 - **No guarantees:** This server is a community project, not affiliated with the Swiss Federal Institute of Intellectual Property (IGE/IPI). Availability depends on upstream API uptime.
 
 ---

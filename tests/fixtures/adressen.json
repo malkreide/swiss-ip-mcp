@@ -1,0 +1,39 @@
+{
+  "recorded_at": "2026-08-08",
+  "idp": {
+    "gebaut": {
+      "url": "https://idp.ipi.ch/auth/realms/egov/protocol/openid-connect/token",
+      "status": 401,
+      "error": "invalid_grant"
+    },
+    "kontrolle_erfundener_client": {
+      "url": "https://idp.ipi.ch/auth/realms/egov/protocol/openid-connect/token",
+      "status": 401,
+      "error": "invalid_client"
+    },
+    "kontrolle_erfundener_realm": {
+      "url": "https://idp.ipi.ch/auth/realms/diesen-realm-gibt-es-nicht/protocol/openid-connect/token",
+      "status": 404,
+      "error": "Realm does not exist"
+    }
+  },
+  "realm_deklariert_token_endpoint": "https://idp.ipi.ch/auth/realms/egov/protocol/openid-connect/token",
+  "api": {
+    "gebaut": {
+      "url": "https://www.swissreg.ch/public/api/v1",
+      "status_ohne_token": 403
+    },
+    "kontrolle_erfundener_pfad": {
+      "url": "https://www.swissreg.ch/public/api/diesen-pfad-gibt-es-nicht",
+      "status_ohne_token": 403
+    }
+  },
+  "doku_deklariert": {
+    "token_url": true,
+    "client_id": true,
+    "api_endpoint": true,
+    "grant_type_password": true
+  },
+  "doku_url": "https://www.swissreg.ch/public/apidocs/reference/authentication.html",
+  "befund": "Nullbefund — jede gebaute Adresse ist die, die die Quelle fuehrt"
+}
