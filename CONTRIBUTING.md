@@ -176,3 +176,29 @@ This server is part of a coherent portfolio of Swiss open-data MCP servers. When
 ---
 
 Questions? Open a [GitHub Discussion](https://github.com/malkreide/swiss-ip-mcp/discussions) or file an issue.
+
+## The live suite: when it runs, and who sees a red result
+
+**Cadence:** Monday 03:00 UTC, plus on demand via *Actions → Live Tests → Run
+workflow*. See [`.github/workflows/live.yml`](.github/workflows/live.yml).
+
+**Who sees it:** a red run opens an issue titled `Live-Tests gegen swissreg.ch (IGE/IPI) rot …`
+with the `upstream` label. A run that goes green again closes it.
+
+**Without IGE credentials the suite does not run** — and then reports `unknown`,
+not green. The job goes red without touching the issue: a run that never checked
+the contract with swissreg.ch may neither claim nor close anything. To actually
+run it, set `IGE_USERNAME` and `IGE_PASSWORD` as repository secrets.
+
+**Three answers, not two.** `scripts/classify_live_run.py` reads the JUnit XML rather than
+the exit code and separates `clear` (ran, green), `finding` (ran, something
+fell) and `unknown` (did not run — install failed, nothing collected,
+everything skipped). An `unknown` never closes an issue: closing would claim a
+comparison that never happened.
+
+**A red live run does not necessarily mean *our* bug.** It means the contract
+with the source has changed, or the source is down. Both belong seen; only the
+first belongs fixed. Please read the run before disabling the job — that is how
+this check dies, and it is the only one in the repository that can contradict a
+wrong assumption about swissreg.ch. Every other test asserts against a fixture, and
+the fixture was written from the same assumption as the code.
