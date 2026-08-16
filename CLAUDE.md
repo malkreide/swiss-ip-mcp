@@ -70,9 +70,26 @@ sie dieselbe Version aus `pyproject.toml` beziehen und keine zweite nennen.
 ```
 ruff check src/ tests/ scripts/
 ruff format --check src/ tests/ scripts/
+python -m py_compile src/swiss_ip_mcp/server.py
 pytest tests/ -m "not live" -v
 python scripts/check_version_sync.py
 ```
+
+Der `py_compile`-Schritt fehlte hier, obwohl der Block «wörtlich» heisst — er
+steht in `ci.yml` zwischen Format-Check und Tests. Alle fünf laufen im Job
+`quality` auf allen drei Versionen, keine `if:`-Ausnahme; ein
+`fail-fast: false` steht nicht da.
+
+**Der pytest-Schritt ist bedingt — und das ist ein stiller Ausgang.** In
+`ci.yml` steht er als `if [ -d "tests" ]; then pytest …; else echo "No tests
+directory found, skipping."; fi`. Verschwindet `tests/`, gibt der Schritt
+Exit 0 und der Lauf wird grün, ohne einen einzigen Test gefahren zu haben.
+Ein Verzeichnis, dessen Fehlen kein Gate rot macht, ist genau die Bauart, vor
+der Teil 1 warnt. Wer prüft, ob die Suite lief, liest die Zahl im Log, nicht
+die Farbe.
+
+**`secret-scan.yml` gatet ebenfalls jeden PR** und stand in keiner Liste.
+Lokal stellt ihn keiner der Befehle oben nach.
 
 **Live-Tests: geplanter Workflow vorhanden.** `.github/workflows/live.yml`,
 `cron: "0 3 * * 1"` plus `workflow_dispatch`. Die Live-Suite ist also nicht bloss
