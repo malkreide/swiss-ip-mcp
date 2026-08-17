@@ -7,7 +7,6 @@ and are skipped automatically if IGE_USERNAME is not set.
 
 from __future__ import annotations
 
-import json
 import os
 import xml.etree.ElementTree as ET
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -86,6 +85,7 @@ def _make_root(xml_str: str) -> ET.Element:
 # Unit tests – XML helpers
 # ---------------------------------------------------------------------------
 
+
 class TestXmlHelpers:
     def test_esc_basic(self):
         assert _esc("a&b") == "a&amp;b"
@@ -143,6 +143,7 @@ class TestXmlHelpers:
 # Unit tests – error handler
 # ---------------------------------------------------------------------------
 
+
 class TestErrorHandler:
     def test_value_error(self):
         msg = _handle_error(ValueError("missing credentials"))
@@ -151,6 +152,7 @@ class TestErrorHandler:
 
     def test_timeout(self):
         import httpx
+
         msg = _handle_error(httpx.ReadTimeout("timed out"))
         assert "timed out" in msg.lower() or "timeout" in msg.lower()
 
@@ -175,6 +177,7 @@ class TestErrorHandler:
 # Unit tests – tools (mocked API)
 # ---------------------------------------------------------------------------
 
+
 class TestToolDescriptions:
     @pytest.mark.asyncio
     async def test_all_tools_have_use_case_tag(self):
@@ -194,6 +197,7 @@ class TestProvenance:
         root = _make_root(SAMPLE_TM_XML)
         with patch("swiss_ip_mcp.server._call_api", new=AsyncMock(return_value=root)):
             from swiss_ip_mcp.server import TrademarkSearchInput
+
             result = (await swiss_ip_search_trademarks(TrademarkSearchInput(query="x"))).model_dump(exclude_none=True)
         assert result["source"]["name"].startswith("Swissreg")
         assert "license" in result["source"]
@@ -205,6 +209,7 @@ class TestProvenance:
         root = _make_root(SAMPLE_TM_XML)
         with patch("swiss_ip_mcp.server._call_api", new=AsyncMock(return_value=root)):
             from swiss_ip_mcp.server import TrademarkSearchInput
+
             result = (await swiss_ip_search_trademarks(TrademarkSearchInput(query="x"))).model_dump(exclude_none=True)
         assert result["match_type"] == "exact"
         assert "suggestion" not in result
@@ -215,7 +220,9 @@ class TestProvenance:
         root = _make_root(SAMPLE_EMPTY_XML)
         with patch("swiss_ip_mcp.server._call_api", new=AsyncMock(return_value=root)):
             from swiss_ip_mcp.server import PatentSearchInput
-            result = (await swiss_ip_search_patents(PatentSearchInput(query="zzzznomatch"))).model_dump(exclude_none=True)
+
+            antwort = await swiss_ip_search_patents(PatentSearchInput(query="zzzznomatch"))
+            result = antwort.model_dump(exclude_none=True)
         assert result["match_type"] == "none"
         assert result["count"] == 0
         assert "Wildcard" in result["suggestion"]
@@ -235,6 +242,7 @@ class TestTrademarkTools:
         root = _make_root(SAMPLE_TM_XML)
         with patch("swiss_ip_mcp.server._call_api", new=AsyncMock(return_value=root)):
             from swiss_ip_mcp.server import TrademarkSearchInput
+
             params = TrademarkSearchInput(query="ZÜRITEST")
             result_str = await swiss_ip_search_trademarks(params)
             result = result_str.model_dump(exclude_none=True)
@@ -246,11 +254,11 @@ class TestTrademarkTools:
         # OBS-001: execution errors raise → MCPServer returns isError=true.
         import httpx
         from mcp.server.mcpserver.exceptions import ToolError
-        err = httpx.HTTPStatusError(
-            "401", request=MagicMock(), response=MagicMock(status_code=401)
-        )
+
+        err = httpx.HTTPStatusError("401", request=MagicMock(), response=MagicMock(status_code=401))
         with patch("swiss_ip_mcp.server._call_api", new=AsyncMock(side_effect=err)):
             from swiss_ip_mcp.server import TrademarkSearchInput
+
             params = TrademarkSearchInput(query="test")
             with pytest.raises(ToolError) as ei:
                 await swiss_ip_search_trademarks(params)
@@ -261,6 +269,7 @@ class TestTrademarkTools:
         root = _make_root(SAMPLE_EMPTY_XML)
         with patch("swiss_ip_mcp.server._call_api", new=AsyncMock(return_value=root)):
             from swiss_ip_mcp.server import TrademarkNumberInput
+
             params = TrademarkNumberInput(trademark_number="P-000000")
             result_str = await swiss_ip_get_trademark(params)
             result = result_str.model_dump(exclude_none=True)
@@ -274,6 +283,7 @@ class TestTrademarkTools:
         root = _make_root(SAMPLE_TM_XML)
         with patch("swiss_ip_mcp.server._call_api", new=AsyncMock(return_value=root)):
             from swiss_ip_mcp.server import TrademarkOwnerSearchInput
+
             params = TrademarkOwnerSearchInput(owner_name="Mustermann AG")
             result_str = await swiss_ip_search_trademarks_by_owner(params)
             result = result_str.model_dump(exclude_none=True)
@@ -284,6 +294,7 @@ class TestTrademarkTools:
         root = _make_root(SAMPLE_TM_XML)
         with patch("swiss_ip_mcp.server._call_api", new=AsyncMock(return_value=root)):
             from swiss_ip_mcp.server import TrademarkClassInput
+
             params = TrademarkClassInput(nice_class=41)
             result_str = await swiss_ip_search_trademarks_by_class(params)
             result = result_str.model_dump(exclude_none=True)
@@ -296,6 +307,7 @@ class TestPatentTools:
         root = _make_root(SAMPLE_TM_XML)  # structure same
         with patch("swiss_ip_mcp.server._call_api", new=AsyncMock(return_value=root)):
             from swiss_ip_mcp.server import PatentSearchInput
+
             params = PatentSearchInput(query="solar*")
             result_str = await swiss_ip_search_patents(params)
             result = result_str.model_dump(exclude_none=True)
@@ -306,6 +318,7 @@ class TestPatentTools:
         root = _make_root(SAMPLE_EMPTY_XML)
         with patch("swiss_ip_mcp.server._call_api", new=AsyncMock(return_value=root)):
             from swiss_ip_mcp.server import PatentNumberInput
+
             params = PatentNumberInput(patent_number="CH000000")
             result_str = await swiss_ip_get_patent(params)
             result = result_str.model_dump(exclude_none=True)
@@ -318,6 +331,7 @@ class TestPatentTools:
         root = _make_root(SAMPLE_TM_XML)
         with patch("swiss_ip_mcp.server._call_api", new=AsyncMock(return_value=root)):
             from swiss_ip_mcp.server import PatentApplicantInput
+
             params = PatentApplicantInput(applicant_name="ABB*")
             result_str = await swiss_ip_search_patents_by_applicant(params)
             result = result_str.model_dump(exclude_none=True)
@@ -328,6 +342,7 @@ class TestPatentTools:
         root = _make_root(SAMPLE_TM_XML)
         with patch("swiss_ip_mcp.server._call_api", new=AsyncMock(return_value=root)):
             from swiss_ip_mcp.server import PatentSearchInput
+
             params = PatentSearchInput(query="battery*")
             result_str = await swiss_ip_search_patent_publications(params)
             result = result_str.model_dump(exclude_none=True)
@@ -340,6 +355,7 @@ class TestSpcTools:
         root = _make_root(SAMPLE_TM_XML)
         with patch("swiss_ip_mcp.server._call_api", new=AsyncMock(return_value=root)):
             from swiss_ip_mcp.server import SpcSearchInput
+
             params = SpcSearchInput(query="Novartis")
             result_str = await swiss_ip_search_spc(params)
             result = result_str.model_dump(exclude_none=True)
@@ -352,6 +368,7 @@ class TestCrossDomainTools:
         root = _make_root(SAMPLE_TM_XML)
         with patch("swiss_ip_mcp.server._call_api", new=AsyncMock(return_value=root)):
             from swiss_ip_mcp.server import DateRangeInput
+
             params = DateRangeInput(
                 ip_type="trademark",
                 date_from="2025-01-01",
@@ -366,6 +383,7 @@ class TestCrossDomainTools:
         root = _make_root(SAMPLE_TM_XML)
         with patch("swiss_ip_mcp.server._call_api", new=AsyncMock(return_value=root)):
             from swiss_ip_mcp.server import DateRangeInput
+
             params = DateRangeInput(
                 ip_type="patent",
                 date_from="2025-06-01",
@@ -388,11 +406,13 @@ class TestCrossDomainTools:
 # Validation tests
 # ---------------------------------------------------------------------------
 
+
 class TestInputValidation:
     def test_trademark_search_empty_query(self):
         from pydantic import ValidationError
 
         from swiss_ip_mcp.server import TrademarkSearchInput
+
         with pytest.raises(ValidationError):
             TrademarkSearchInput(query="")
 
@@ -400,6 +420,7 @@ class TestInputValidation:
         from pydantic import ValidationError
 
         from swiss_ip_mcp.server import PatentSearchInput
+
         with pytest.raises(ValidationError):
             PatentSearchInput(query="test", page_size=0)
         with pytest.raises(ValidationError):
@@ -409,6 +430,7 @@ class TestInputValidation:
         from pydantic import ValidationError
 
         from swiss_ip_mcp.server import TrademarkClassInput
+
         with pytest.raises(ValidationError):
             TrademarkClassInput(nice_class=0)
         with pytest.raises(ValidationError):
@@ -418,6 +440,7 @@ class TestInputValidation:
         from pydantic import ValidationError
 
         from swiss_ip_mcp.server import DateRangeInput
+
         with pytest.raises(ValidationError):
             DateRangeInput(
                 ip_type="design",  # not supported
@@ -429,6 +452,7 @@ class TestInputValidation:
         from pydantic import ValidationError
 
         from swiss_ip_mcp.server import DateRangeInput
+
         with pytest.raises(ValidationError):
             DateRangeInput(
                 ip_type="trademark",
@@ -440,6 +464,7 @@ class TestInputValidation:
 # ---------------------------------------------------------------------------
 # Unit tests – structured logging (OBS-003)
 # ---------------------------------------------------------------------------
+
 
 class TestStructuredLogging:
     def test_get_logger_configures(self):
@@ -457,6 +482,7 @@ class TestStructuredLogging:
         with structlog.testing.capture_logs() as logs:
             with patch("swiss_ip_mcp.server._call_api", new=AsyncMock(return_value=root)):
                 from swiss_ip_mcp.server import TrademarkSearchInput
+
                 await swiss_ip_search_trademarks(TrademarkSearchInput(query="x"))
         events = [e["event"] for e in logs]
         assert "tool.call.start" in events
@@ -464,14 +490,15 @@ class TestStructuredLogging:
     @pytest.mark.asyncio
     async def test_unexpected_error_logged_at_error_level(self):
         import structlog
-
         from mcp.server.mcpserver.exceptions import ToolError
+
         with structlog.testing.capture_logs() as logs:
             with patch(
                 "swiss_ip_mcp.server._call_api",
                 new=AsyncMock(side_effect=RuntimeError("boom")),
             ):
                 from swiss_ip_mcp.server import TrademarkSearchInput
+
                 with pytest.raises(ToolError):
                     await swiss_ip_search_trademarks(TrademarkSearchInput(query="x"))
         errors = [e for e in logs if e["event"] == "unexpected_error"]
@@ -483,6 +510,7 @@ class TestStructuredLogging:
 # ---------------------------------------------------------------------------
 # Unit tests – MCP error semantics & primitives (OBS-001, ARCH-008)
 # ---------------------------------------------------------------------------
+
 
 class TestMcpErrorSemantics:
     """OBS-001 end-to-end via the public in-process client.
@@ -501,14 +529,10 @@ class TestMcpErrorSemantics:
 
         from swiss_ip_mcp.server import mcp
 
-        err = httpx.HTTPStatusError(
-            "500", request=MagicMock(), response=MagicMock(status_code=500)
-        )
+        err = httpx.HTTPStatusError("500", request=MagicMock(), response=MagicMock(status_code=500))
         with patch("swiss_ip_mcp.server._call_api", new=AsyncMock(side_effect=err)):
             async with Client(mcp) as client:
-                result = await client.call_tool(
-                    "swiss_ip_search_trademarks", {"params": {"query": "x"}}
-                )
+                result = await client.call_tool("swiss_ip_search_trademarks", {"params": {"query": "x"}})
         assert result.is_error is True
         # masked: no stack trace / upstream body in the surfaced text
         text = result.content[0].text
@@ -524,9 +548,7 @@ class TestMcpErrorSemantics:
         root = _make_root(SAMPLE_TM_XML)
         with patch("swiss_ip_mcp.server._call_api", new=AsyncMock(return_value=root)):
             async with Client(mcp) as client:
-                result = await client.call_tool(
-                    "swiss_ip_search_trademarks", {"params": {"query": "x"}}
-                )
+                result = await client.call_tool("swiss_ip_search_trademarks", {"params": {"query": "x"}})
         assert result.is_error is False
 
     @pytest.mark.asyncio
@@ -588,6 +610,7 @@ class TestMcpPrimitives:
 # Unit tests – OpenTelemetry tracing (OBS-006)
 # ---------------------------------------------------------------------------
 
+
 class TestTelemetry:
     def test_disabled_by_default(self, monkeypatch):
         from swiss_ip_mcp import telemetry
@@ -632,9 +655,8 @@ class TestTelemetry:
             root = _make_root(SAMPLE_TM_XML)
             with patch("swiss_ip_mcp.server._call_api", new=AsyncMock(return_value=root)):
                 from swiss_ip_mcp.server import TrademarkSearchInput
-                await swiss_ip_search_trademarks(
-                    TrademarkSearchInput(query="SECRET-QUERY")
-                )
+
+                await swiss_ip_search_trademarks(TrademarkSearchInput(query="SECRET-QUERY"))
         finally:
             telemetry.tracer = original
 
@@ -654,26 +676,25 @@ class TestTelemetry:
         original = telemetry.tracer
         exporter = self._capture()
         try:
-            err = httpx.HTTPStatusError(
-                "500", request=MagicMock(), response=MagicMock(status_code=500)
-            )
+            err = httpx.HTTPStatusError("500", request=MagicMock(), response=MagicMock(status_code=500))
             from mcp.server.mcpserver.exceptions import ToolError
+
             with patch("swiss_ip_mcp.server._call_api", new=AsyncMock(side_effect=err)):
                 from swiss_ip_mcp.server import TrademarkSearchInput
+
                 with pytest.raises(ToolError):
                     await swiss_ip_search_trademarks(TrademarkSearchInput(query="x"))
         finally:
             telemetry.tracer = original
 
-        span = {s.name: s for s in exporter.get_finished_spans()}[
-            "mcp.tool/swiss_ip_search_trademarks"
-        ]
+        span = {s.name: s for s in exporter.get_finished_spans()}["mcp.tool/swiss_ip_search_trademarks"]
         assert span.attributes["mcp.tool.result.is_error"] is True
 
 
 # ---------------------------------------------------------------------------
 # Unit tests – typed response models (SDK-002)
 # ---------------------------------------------------------------------------
+
 
 class TestTypedReturns:
     @pytest.mark.asyncio
@@ -722,6 +743,7 @@ class TestTypedReturns:
 # Unit tests – pooled HTTP client & lifespan (SDK-001)
 # ---------------------------------------------------------------------------
 
+
 class TestPooledClient:
     def test_get_client_is_pooled(self):
         import swiss_ip_mcp.server as srv
@@ -756,6 +778,7 @@ class TestPooledClient:
 # ---------------------------------------------------------------------------
 # Unit tests – transport / network configuration (SCALE-001, SEC-016)
 # ---------------------------------------------------------------------------
+
 
 class TestTransportConfig:
     def test_default_transport_is_stdio(self, monkeypatch):
@@ -815,6 +838,7 @@ class TestTransportConfig:
 # ---------------------------------------------------------------------------
 # Unit tests – HTTP serving wires CORS + binding warning (SDK-004, SEC-016)
 # ---------------------------------------------------------------------------
+
 
 class TestHttpServing:
     def test_run_http_configures_cors_and_binds_configured_host(self, monkeypatch):
@@ -894,9 +918,9 @@ class TestDeployment:
 
     def test_dockerfile_is_hardened(self):
         text = (_REPO_ROOT / "Dockerfile").read_text(encoding="utf-8")
-        assert "USER 10001:10001" in text          # non-root UID >= 10000 (SEC-007)
-        assert "HEALTHCHECK" in text                # SCALE-004
-        assert text.count("FROM ") >= 2             # multi-stage
+        assert "USER 10001:10001" in text  # non-root UID >= 10000 (SEC-007)
+        assert "HEALTHCHECK" in text  # SCALE-004
+        assert text.count("FROM ") >= 2  # multi-stage
         assert "-slim" in text
 
     def test_compose_has_resource_limits(self):
@@ -926,6 +950,7 @@ class TestDeployment:
 # ---------------------------------------------------------------------------
 # Unit tests – egress allow-list & tool manifest (SEC-021, SEC-022)
 # ---------------------------------------------------------------------------
+
 
 class TestCredentialsSecret:
     def test_credentials_are_secretstr_and_masked(self, monkeypatch):
@@ -969,9 +994,7 @@ class TestProgressReporting:
             mock.post(srv.IDP_TOKEN_URL).mock(
                 return_value=httpx.Response(200, json={"access_token": "t", "expires_in": 300})
             )
-            mock.post(srv.API_ENDPOINT).mock(
-                return_value=httpx.Response(200, content=SAMPLE_TM_XML.encode("utf-8"))
-            )
+            mock.post(srv.API_ENDPOINT).mock(return_value=httpx.Response(200, content=SAMPLE_TM_XML.encode("utf-8")))
             await srv._call_api("<x/>", ctx)
 
         assert ctx.report_progress.await_count == 2
@@ -982,8 +1005,8 @@ class TestEgressAllowList:
     def test_allows_fixed_ige_hosts(self):
         import swiss_ip_mcp.server as srv
 
-        srv._assert_host_allowed(srv.IDP_TOKEN_URL)   # no raise
-        srv._assert_host_allowed(srv.API_ENDPOINT)    # no raise
+        srv._assert_host_allowed(srv.IDP_TOKEN_URL)  # no raise
+        srv._assert_host_allowed(srv.API_ENDPOINT)  # no raise
 
     def test_blocks_other_hosts(self):
         import swiss_ip_mcp.server as srv
@@ -1008,9 +1031,7 @@ class TestToolManifest:
         from swiss_ip_mcp.server import mcp
 
         current = await compute_manifest(mcp)
-        pinned = _json.loads(
-            (_REPO_ROOT / "tool_manifest.json").read_text(encoding="utf-8")
-        )
+        pinned = _json.loads((_REPO_ROOT / "tool_manifest.json").read_text(encoding="utf-8"))
         assert current == pinned
 
     @pytest.mark.asyncio
@@ -1025,6 +1046,7 @@ class TestToolManifest:
 # ---------------------------------------------------------------------------
 # Unit tests – real HTTP path via respx (OPS-001)
 # ---------------------------------------------------------------------------
+
 
 class TestRespxHttpPath:
     @pytest.mark.asyncio
@@ -1044,15 +1066,13 @@ class TestRespxHttpPath:
 
         with respx.mock(assert_all_called=True) as mock:
             mock.post(srv.IDP_TOKEN_URL).mock(
-                return_value=httpx.Response(
-                    200, json={"access_token": "tok", "expires_in": 300}
-                )
+                return_value=httpx.Response(200, json={"access_token": "tok", "expires_in": 300})
             )
-            mock.post(srv.API_ENDPOINT).mock(
-                return_value=httpx.Response(200, content=SAMPLE_TM_XML.encode("utf-8"))
-            )
+            mock.post(srv.API_ENDPOINT).mock(return_value=httpx.Response(200, content=SAMPLE_TM_XML.encode("utf-8")))
             from swiss_ip_mcp.server import TrademarkSearchInput
-            result = (await srv.swiss_ip_search_trademarks(TrademarkSearchInput(query="x"))).model_dump(exclude_none=True)
+
+            antwort = await srv.swiss_ip_search_trademarks(TrademarkSearchInput(query="x"))
+            result = antwort.model_dump(exclude_none=True)
 
         assert result["count"] == 2
         assert result["source"]["name"].startswith("Swissreg")
@@ -1074,12 +1094,11 @@ class TestRespxHttpPath:
 
         with respx.mock as mock:
             mock.post(srv.IDP_TOKEN_URL).mock(
-                return_value=httpx.Response(
-                    200, json={"access_token": "tok", "expires_in": 300}
-                )
+                return_value=httpx.Response(200, json={"access_token": "tok", "expires_in": 300})
             )
             mock.post(srv.API_ENDPOINT).mock(return_value=httpx.Response(401))
             from swiss_ip_mcp.server import TrademarkSearchInput
+
             with pytest.raises(ToolError) as ei:
                 await srv.swiss_ip_search_trademarks(TrademarkSearchInput(query="x"))
         assert "401" in str(ei.value)
@@ -1092,6 +1111,7 @@ class TestLiveApi:
     @pytest.mark.asyncio
     async def test_live_trademark_search(self):
         from swiss_ip_mcp.server import TrademarkSearchInput
+
         params = TrademarkSearchInput(query="Zürich*", page_size=3)
         result_str = await swiss_ip_search_trademarks(params)
         result = result_str.model_dump(exclude_none=True)
@@ -1101,6 +1121,7 @@ class TestLiveApi:
     @pytest.mark.asyncio
     async def test_live_patent_search(self):
         from swiss_ip_mcp.server import PatentSearchInput
+
         params = PatentSearchInput(query="Roche*", page_size=3)
         result_str = await swiss_ip_search_patents(params)
         result = result_str.model_dump(exclude_none=True)
@@ -1109,6 +1130,7 @@ class TestLiveApi:
     @pytest.mark.asyncio
     async def test_live_spc_search(self):
         from swiss_ip_mcp.server import SpcSearchInput
+
         params = SpcSearchInput(query="Novartis*", page_size=3)
         result_str = await swiss_ip_search_spc(params)
         result = result_str.model_dump(exclude_none=True)

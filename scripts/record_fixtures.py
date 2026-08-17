@@ -68,9 +68,7 @@ sys.path.insert(0, str(ROOT / "src"))
 from swiss_ip_mcp.server import API_ENDPOINT, CLIENT_ID, IDP_TOKEN_URL  # noqa: E402
 
 DOKU = "https://www.swissreg.ch/public/apidocs/reference/authentication.html"
-WELL_KNOWN = IDP_TOKEN_URL.replace(
-    "/protocol/openid-connect/token", "/.well-known/openid-configuration"
-)
+WELL_KNOWN = IDP_TOKEN_URL.replace("/protocol/openid-connect/token", "/.well-known/openid-configuration")
 ERFUNDENER_REALM = IDP_TOKEN_URL.replace("/realms/egov/", "/realms/diesen-realm-gibt-es-nicht/")
 
 
@@ -140,9 +138,7 @@ def record() -> int:
         wk.raise_for_status()
         deklariert = wk.json().get("token_endpoint")
         if deklariert != IDP_TOKEN_URL:
-            raise SystemExit(
-                f"Der Realm deklariert {deklariert}, der Server baut {IDP_TOKEN_URL}."
-            )
+            raise SystemExit(f"Der Realm deklariert {deklariert}, der Server baut {IDP_TOKEN_URL}.")
 
         # -- 3) Die API unterscheidet NICHT — deshalb die Doku --------------
         xml = b'<?xml version="1.0"?><Request/>'

@@ -74,7 +74,6 @@ packages = ["src/swiss_ip_mcp"]
 
 [tool.ruff]
 line-length = 120
-include = ["src/**/*.py"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "B"]
