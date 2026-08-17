@@ -42,13 +42,18 @@ jobs:
       - name: Syntax check
         run: python -m py_compile src/swiss_ip_mcp/server.py
 
+      # Ohne Bedingung. Hier stand `if [ -d "tests" ]; then … else echo "No
+      # tests directory found, skipping."; fi` — ein Zweig, der bei
+      # verschwundenem `tests/` eine Zeile ausgibt und mit 0 endet. Der Job
+      # waere gruen geblieben, ohne einen einzigen Test gefahren zu haben, und
+      # ein gruener Haken haette dann bedeutet: nichts geprueft.
+      #
+      # Uebersprungen ist nicht bestanden (OPS-005). Fehlt `tests/`, endet
+      # pytest mit 4; sammelt es nach `-m "not live"` nichts ein, mit 5.
+      # Beides ist rot, und beides ist die richtige Antwort: Ein Unit-Gate
+      # ohne Unit-Tests hat nichts zugesichert.
       - name: Run unit tests (excluding live)
-        run: |
-          if [ -d "tests" ]; then
-            pytest tests/ -m "not live" -v
-          else
-            echo "No tests directory found, skipping."
-          fi
+        run: pytest tests/ -m "not live" -v
 
       - name: Versions-Sync (pyproject ↔ server.json / README / src)
         run: python scripts/check_version_sync.py
