@@ -83,13 +83,19 @@ steht in `ci.yml` zwischen Format-Check und Tests. Alle fünf laufen im Job
 `quality` auf allen drei Versionen, keine `if:`-Ausnahme; ein
 `fail-fast: false` steht nicht da.
 
-**Der pytest-Schritt ist bedingt — und das ist ein stiller Ausgang.** In
-`ci.yml` steht er als `if [ -d "tests" ]; then pytest …; else echo "No tests
-directory found, skipping."; fi`. Verschwindet `tests/`, gibt der Schritt
-Exit 0 und der Lauf wird grün, ohne einen einzigen Test gefahren zu haben.
-Ein Verzeichnis, dessen Fehlen kein Gate rot macht, ist genau die Bauart, vor
-der Teil 1 warnt. Wer prüft, ob die Suite lief, liest die Zahl im Log, nicht
-die Farbe.
+**Der pytest-Schritt war bedingt — seit diesem Commit nicht mehr.** In
+`ci.yml` stand er als `if [ -d "tests" ]; then pytest …; else echo "No tests
+directory found, skipping."; fi`. Verschwand `tests/`, gab der Schritt Exit 0
+und der Lauf wurde grün, ohne einen einzigen Test gefahren zu haben — ein
+grüner Haken, der «nichts geprüft» bedeutet.
+
+Jetzt läuft `pytest` ohne Bedingung. Fehlt `tests/`, endet es mit 4; sammelt
+es nach `-m "not live"` nichts ein, mit 5. Beides ist rot, und beides ist die
+richtige Antwort: Ein Unit-Gate ohne Unit-Tests hat nichts zugesichert.
+
+Den Zweig nicht zurückholen. Übersprungen ist nicht bestanden (OPS-005), und
+ein Verzeichnis, dessen Fehlen kein Gate rot macht, ist genau die Bauart, vor
+der Teil 1 warnt.
 
 **`secret-scan.yml` gatet ebenfalls jeden PR** und stand in keiner Liste.
 Lokal stellt ihn keiner der Befehle oben nach.
