@@ -79,6 +79,15 @@ pytest tests/ -m "not live" -v
 python scripts/check_version_sync.py
 ```
 
+**Kein `include` unter `[tool.ruff]` setzen.** Hier stand
+`include = ["src/**/*.py"]`, während das Gate `src/ tests/ scripts/` nennt:
+ruff verengte den Umfang still auf `src/` und prüfte 5 von 14 Dateien. Der
+Befehl sagte das eine, geprüft wurde das andere, und nichts widersprach —
+`tests/` und `scripts/` sammelten dabei 4 Lint-Fehler und 4
+Format-Abweichungen an. Der Umfang sind die drei Pfade im Gate-Befehl selbst.
+Wer ihn prüfen will, zählt nach statt hier abzulesen:
+`ruff check src/ tests/ scripts/ --show-files | wc -l`.
+
 Der `py_compile`-Schritt fehlte hier, obwohl der Block «wörtlich» heisst — er
 steht in `ci.yml` zwischen Format-Check und Tests. Alle fünf laufen im Job
 `quality` auf allen drei Versionen, keine `if:`-Ausnahme; ein

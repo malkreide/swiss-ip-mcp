@@ -22,10 +22,7 @@ FIXTURES = Path(__file__).resolve().parent / "fixtures"
 def _fix() -> dict:
     pfad = FIXTURES / "adressen.json"
     if not pfad.is_file():
-        raise FileNotFoundError(
-            f"Keine Fixture unter {pfad}. Neu aufzeichnen mit "
-            "`python scripts/record_fixtures.py`."
-        )
+        raise FileNotFoundError(f"Keine Fixture unter {pfad}. Neu aufzeichnen mit `python scripts/record_fixtures.py`.")
     return copy.deepcopy(json.loads(pfad.read_text(encoding="utf-8")))
 
 
@@ -88,6 +85,4 @@ class TestNullbefund:
         f = _fix()
         assert f["idp"]["gebaut"]["url"] == IDP_TOKEN_URL
         assert f["api"]["gebaut"]["url"] == API_ENDPOINT
-        assert CLIENT_ID == "datadelivery-api-client", (
-            "Die Doku nennt diesen Wert woertlich als «constant string»."
-        )
+        assert CLIENT_ID == "datadelivery-api-client", "Die Doku nennt diesen Wert woertlich als «constant string»."
