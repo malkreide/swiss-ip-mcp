@@ -68,6 +68,16 @@ sie dieselbe Version aus `pyproject.toml` beziehen und keine zweite nennen.
 Vor dem Lauf `ruff --version` prüfen: ein älteres ruff früher im `PATH`
 schlägt den Pin, ohne dass der Install etwas meldet.
 
+Meldet `scripts/check_ruff_pin.py` genau das, hilft ein zweiter `pip install`
+nicht: das ältere Binary bleibt vorne im `PATH`. Die Gates dann über das Modul
+fahren — `python -m ruff check …`, `python -m ruff format --check …`. Am
+18.8.2026 lagen so 0.15.8 (PATH) und 0.16.1 (Modul) nebeneinander; `ruff
+format --check` war mit beiden grün, was den Unterschied nicht widerlegt.
+
+`line-length = 120` steht unter `[tool.ruff]`. Im Portfolio stehen daneben 88
+und 100: aus einem anderen Server kopierter Code ist hier lint-sauber und
+fällt trotzdem bei `ruff format --check` um.
+
 **Gates, wörtlich aus `ci.yml`** (Matrix: Python 3.11 / 3.12 / 3.13):
 
 ```
