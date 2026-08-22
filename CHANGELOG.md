@@ -5,7 +5,31 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Behoben
+
+- **Browser-Clients scheiterten am Preflight.** Spec `2026-07-28` routet eine
+  Streamable-HTTP-Anfrage ueber `Mcp-Method`, `Mcp-Name` und
+  `Mcp-Protocol-Version`; die CORS-Freigabeliste nannte keinen davon, dafuer mit
+  `Mcp-Session-Id` den Header genau der Session-Mechanik, die dieselbe Revision
+  abgeschafft hat. Ein Browser darf einen nicht safelisteten Header nicht
+  senden, wenn der Server ihn nicht nennt: die Anfrage starb vor dem ersten
+  MCP-Byte, waehrend stdio und Python weiterliefen.
+
+- **Der Protokoll-Abschnitt der README beschrieb einen anderen Server.** Er
+  nannte `mcp, used via fastmcp` — dieser Server verwendet `mcp.server.mcpserver`
+  direkt — sowie die Aushandlung «during `initialize`» und die Version
+  `2025-11-25`. Handshake und Session sind seit `2026-07-28` abgeschafft, und
+  das installierte SDK spricht dieselbe Revision.
+
 ### Hinzugefuegt
+
+- **Frischehinweise auf den auflistenden Methoden** (SEP-2549, Spec
+  `2026-07-28`): `tools/list`, `resources/list`, `resources/templates/list`,
+  `prompts/list` und `server/discover` antworten mit `ttlMs` 300000 und
+  `cacheScope` `public`. `resources/read` und `prompts/get` bleiben ohne
+  Hinweis: das waere eine Zusicherung ueber den Inhalt statt ueber das
+  Verzeichnis.
+
 
 - **Die Adressliste ist ohne Zugangsdaten geprueft — Ergebnis: Nullbefund.**
   Jede Adresse, der Keycloak-Realm und der `client_id`, die dieser Server
