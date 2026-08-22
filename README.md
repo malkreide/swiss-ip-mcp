@@ -303,9 +303,9 @@ all log lines for one call are correlated. Set the level with `LOG_LEVEL`
 
 ## MCP Protocol Version
 
-The MCP protocol version is provided by the pinned [MCP Python SDK](https://github.com/modelcontextprotocol/python-sdk) (`mcp`, used via `fastmcp`) and negotiated per the spec during `initialize` — the server agrees on the highest version both it and the client support. With the currently pinned SDK the latest supported version is **`2025-11-25`** (older clients negotiate down automatically). This value follows the SDK, so it is not hard-coded here.
+The MCP protocol version comes from the pinned [MCP Python SDK](https://github.com/modelcontextprotocol/python-sdk) (`mcp[cli]>=2.0.0,<3` — this server uses `mcp.server.mcpserver`, not `fastmcp`). Spec `2026-07-28` removed the `initialize` handshake and the session it opened: the version now rides on every request as an `Mcp-Protocol-Version` header, so there is nothing negotiated once and remembered. With the currently pinned SDK that version is **`2026-07-28`**. The value follows the SDK and is not hard-coded here.
 
-**Update policy:** the SDK floor is pinned in `pyproject.toml`; [Dependabot](.github/dependabot.yml) opens monthly PRs for `mcp` / `fastmcp` updates. Protocol-version or SDK bumps that change behaviour are reviewed in those PRs and recorded in [`CHANGELOG.md`](CHANGELOG.md).
+**Update policy:** the SDK range is pinned in `pyproject.toml`; [Dependabot](.github/dependabot.yml) opens monthly PRs for `mcp` updates. Protocol-version or SDK bumps that change behaviour are reviewed in those PRs and recorded in [`CHANGELOG.md`](CHANGELOG.md).
 
 ---
 
