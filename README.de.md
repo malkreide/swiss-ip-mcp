@@ -296,9 +296,30 @@ wird über `LOG_LEVEL` gesetzt (`DEBUG` / `INFO` / `WARNING` / `ERROR`, Standard
 
 ## MCP-Protokollversion
 
-Die MCP-Protokollversion stammt aus dem gepinnten [MCP Python SDK](https://github.com/modelcontextprotocol/python-sdk) (`mcp`, via `fastmcp`) und wird gemäss Spezifikation beim `initialize` ausgehandelt — der Server einigt sich auf die höchste von beiden Seiten unterstützte Version. Mit dem aktuell gepinnten SDK ist die höchste unterstützte Version **`2025-11-25`** (ältere Clients handeln automatisch herunter). Dieser Wert folgt dem SDK und ist hier nicht fest verdrahtet.
+Dieser Server bedient **zwei Protokoll-Aeren** ueber denselben Endpunkt. Die
+erste Anfrage einer Verbindung entscheidet, welche gilt; ein spaeterer Anspruch
+aus der jeweils anderen Aera wird abgewiesen.
 
-**Update-Policy:** Die SDK-Untergrenze ist in `pyproject.toml` gepinnt; [Dependabot](.github/dependabot.yml) öffnet monatlich PRs für `mcp`-/`fastmcp`-Updates. Protokoll- oder SDK-Sprünge mit Verhaltensänderung werden in diesen PRs geprüft und in [`CHANGELOG.md`](CHANGELOG.md) dokumentiert.
+| Aera | Revision | Wer sie erreicht |
+|---|---|---|
+| `initialize`-Handshake | `2024-11-05` … **`2025-11-25`** | Was heutige Clients sprechen. Der Server antwortet mit der angefragten Revision — oder mit der Obergrenze `2025-11-25`, wenn die Anfrage etwas Neueres verlangt. |
+| Pro-Request-Envelope | **`2026-07-28`** | Eine Anfrage mit dem `2026-07-28`-`_meta`-Envelope oeffnet eine moderne Verbindung. |
+
+Beide Revisionen sind in
+[`tests/test_protocol_version.py`](tests/test_protocol_version.py) gepinnt und
+werden gegen das installierte SDK geprueft; ein Dependabot-Bump von `mcp` kann
+also keine der beiden still verschieben. Dieser Server baut keine ASGI-App, durch die sich ein `initialize`
+schicken liesse; das Gate sichert deshalb die SDK-Konstanten statt einer
+gemessenen Antwort — die schwaechere Form, benannt statt verschwiegen.
+
+Zu beachten: `LATEST_PROTOCOL_VERSION` im SDK ist ein Alias auf die **moderne**
+Aera, nicht auf die Handshake-Aera — wer nur dagegen pinnt, laesst genau die
+Aera frei wandern, die heutige Clients tatsaechlich aushandeln.
+
+**Update-Politik.** Faellt das Gate, die Konstante nicht blind nachziehen: erst
+das Spec-Changelog zwischen den beiden Revisionen lesen, pruefen, ob sich der
+Server weiterhin richtig verhaelt, dann Konstante, diesen Abschnitt, `README.md`
+und [`CHANGELOG.md`](CHANGELOG.md) gemeinsam bewegen.
 
 ---
 

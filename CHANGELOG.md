@@ -21,6 +21,13 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   `2025-11-25`. Handshake und Session sind seit `2026-07-28` abgeschafft, und
   das installierte SDK spricht dieselbe Revision.
 
+- **Die beiden READMEs beschrieben verschiedene Server.** `README.md` nannte
+  `2026-07-28` und behauptete, diese Revision habe den `initialize`-Handshake
+  entfernt; `README.de.md` nannte `2025-11-25` und `fastmcp` als Quelle der
+  Version. Beides trifft nicht zu: der Server importiert ausschliesslich
+  `mcp.server.mcpserver`, und `mcp` 2.x bedient beide Aeren nebeneinander.
+  Beide Fassungen beschreiben jetzt dasselbe, gegen ein Gate gehalten.
+
 ### Hinzugefuegt
 
 - **Frischehinweise auf den auflistenden Methoden** (SEP-2549, Spec
@@ -77,6 +84,23 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **`tests/test_adressen.py`** — 8 Tests, die **in** der CI laufen.
   Gegengeprueft mit zwei Rueckmutationen (`CLIENT_ID` und `API_ENDPOINT` auf
   andere Werte): beide machen die Suite rot.
+
+- **Protokoll-Gate: beide Spec-Aeren gepinnt und geprueft**
+  (`tests/test_protocol_version.py`). `mcp` 2.x bedient zwei Aeren ueber
+  denselben Server — den `initialize`-Handshake, der bei `2025-11-25`
+  deckelt, und den Pro-Request-Envelope, der `2026-07-28` erreicht.
+  `LATEST_PROTOCOL_VERSION` ist ein Alias auf die **moderne** Aera; wer nur
+  dagegen pinnt, laesst genau die Aera frei wandern, die heutige Clients
+  aushandeln. Beide sind jetzt einzeln gepinnt, ein Dependabot-Bump von
+  `mcp` kann keine davon still verschieben.
+
+  Ohne gemessenen Teil: dieser Server baut keine ASGI-App, durch die sich ein
+  `initialize` schicken liesse. Das Gate haengt deshalb an den SDK-Konstanten —
+  die schwaechere Form, im Docstring benannt statt verschwiegen.
+
+  Beide READMEs beschreiben die Aeren; ein Test haelt jede Sprache einzeln
+  dagegen — im Portfolio sind EN und DE desselben Repos schon dreimal
+  auseinandergelaufen, weil nur eine Fassung nachgezogen wurde.
 
 
 ## [1.1.6] - 2026-08-02
