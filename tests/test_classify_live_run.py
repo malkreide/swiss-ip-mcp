@@ -116,6 +116,67 @@ class MissingReportTest(unittest.TestCase):
         self.assertEqual(state, clr.UNKNOWN)
 
 
+class NotStartedTest(unittest.TestCase):
+    """pytest nie aufgerufen: Der Grund kommt vom Aufrufer, nicht vom Exit-Code.
+
+    Beobachtet am 24.8.2026 im Lauf 32688274977: Ohne `IGE_USERNAME` meldete
+    der Workflow `--pytest-exit 127`, und daraus wurde «pytest ist nicht bis
+    zum Schreiben gekommen (Exit 127)». 127 heisst «command not found» — der
+    Satz behauptete einen gescheiterten pytest-Aufruf, den es nie gab.
+    """
+
+    def test_grund_wird_woertlich_durchgereicht(self):
+        state, reason = clr.classify(
+            Path("/nonexistent/live-report.xml"),
+            not_started="Secret IGE_USERNAME ist nicht gesetzt",
+        )
+        self.assertEqual(state, clr.UNKNOWN)
+        self.assertEqual(reason, "Secret IGE_USERNAME ist nicht gesetzt")
+
+    def test_kein_erfundener_pytest_lauf_in_der_begruendung(self):
+        _, reason = clr.classify(
+            Path("/nonexistent/live-report.xml"),
+            not_started="Secret IGE_USERNAME ist nicht gesetzt",
+        )
+        self.assertNotIn("pytest ist nicht bis zum Schreiben gekommen", reason)
+        self.assertNotIn("Exit", reason)
+
+    def test_ein_liegengebliebener_report_belegt_nichts(self):
+        """Gruenes XML aus einem frueheren Schritt macht einen Nicht-Lauf nicht gruen."""
+        with tempfile.TemporaryDirectory() as tmp:
+            report = write(Path(tmp), suite(tests=3))
+            state, reason = clr.classify(report, not_started="gar nicht gestartet")
+        self.assertEqual(state, clr.UNKNOWN)
+        self.assertEqual(reason, "gar nicht gestartet")
+
+    def test_leerer_grund_ist_kein_grund(self):
+        """Der Workflow reicht `--not-started` nur gesetzt durch; leer heisst: pytest lief."""
+        with tempfile.TemporaryDirectory() as tmp:
+            report = write(Path(tmp), suite(tests=3))
+            state, _ = clr.classify(report, not_started="")
+        self.assertEqual(state, clr.CLEAR)
+
+    def test_ueber_die_kommandozeile(self):
+        state, reason = self._cli("--not-started", "kein Secret")
+        self.assertEqual(state, "unknown")
+        self.assertEqual(reason, "kein Secret")
+
+    def _cli(self, *extra: str) -> tuple[str, str]:
+        import os
+
+        with tempfile.TemporaryDirectory() as tmp:
+            out = Path(tmp) / "gh-output"
+            out.write_text("", encoding="utf-8")
+            os.environ["GITHUB_OUTPUT"] = str(out)
+            try:
+                clr.main([str(Path(tmp) / "live-report.xml"), *extra])
+            finally:
+                del os.environ["GITHUB_OUTPUT"]
+            written = out.read_text(encoding="utf-8")
+        werte = dict(line.split("=", 1) for line in written.splitlines() if line)
+        return werte["state"], werte["reason"]
+
+
 class GithubOutputTest(unittest.TestCase):
     """Der Workflow liest state und reason ueber $GITHUB_OUTPUT."""
 
@@ -135,6 +196,28 @@ class GithubOutputTest(unittest.TestCase):
         self.assertEqual(rc, 0)
         self.assertIn("state=clear", written)
         self.assertIn("reason=", written)
+
+    def test_ein_mehrzeiliger_grund_schiebt_kein_zweites_output_nach(self):
+        """`key=value` endet an der ersten neuen Zeile — was danach steht, ist Output."""
+        import os
+
+        with tempfile.TemporaryDirectory() as tmp:
+            out = Path(tmp) / "gh-output"
+            out.write_text("", encoding="utf-8")
+            os.environ["GITHUB_OUTPUT"] = str(out)
+            try:
+                clr.main(
+                    [
+                        str(Path(tmp) / "live-report.xml"),
+                        "--not-started",
+                        "kein Secret\nstate=clear",
+                    ]
+                )
+            finally:
+                del os.environ["GITHUB_OUTPUT"]
+            zeilen = [z for z in out.read_text(encoding="utf-8").splitlines() if z]
+        self.assertEqual([z for z in zeilen if z.startswith("state=")], ["state=unknown"])
+        self.assertEqual(len(zeilen), 2)
 
 
 if __name__ == "__main__":

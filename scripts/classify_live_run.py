@@ -38,9 +38,24 @@ uebersprungen» dasselbe. Das XML zaehlt Tests, Fehler, Fehlschlaege und
 Uebersprungene getrennt, also wird es gelesen. Fehlt es, ist pytest gar nicht
 bis zum Schreiben gekommen — auch das ist `unknown`, und zwar mit Grund.
 
+WENN PYTEST NIE GESTARTET WURDE, IST DER EXIT-CODE EINE ERFINDUNG
+-----------------------------------------------------------------
+Der Workflow bricht ab, bevor er pytest aufruft, wenn kein `IGE_USERNAME`
+gesetzt ist. Er meldete das bis zum 28.8.2026 als `--pytest-exit 127`, und
+diese Einordnung machte daraus: «pytest ist nicht bis zum Schreiben gekommen
+(Exit 127)». 127 heisst «command not found» — der Satz behauptete also einen
+gescheiterten pytest-Aufruf, den es nie gab, und schickte den Leser hinter
+einem fehlenden Binary her. Ein geliehener Exit-Code ist kein Grund.
+
+Deshalb `--not-started`: Wer pytest nicht startet, sagt selbst warum, und diese
+Einordnung reicht den Grund durch, statt einen zu konstruieren. Sie sieht dann
+auch nicht ins XML — ein liegengebliebener Report aus einem frueheren Schritt
+belegt nichts ueber einen Lauf, der nicht stattgefunden hat.
+
 Aufruf:
     python scripts/classify_live_run.py live-report.xml
     python scripts/classify_live_run.py live-report.xml --pytest-exit 1
+    python scripts/classify_live_run.py live-report.xml --not-started "kein Secret"
 
 Gibt `state=...` und `reason=...` auf stdout aus und haengt beides an
 `$GITHUB_OUTPUT` an, wenn die Variable gesetzt ist. Der Exit-Code ist immer 0:
@@ -59,8 +74,14 @@ FINDING = "finding"
 UNKNOWN = "unknown"
 
 
-def classify(report: Path, pytest_exit: int | None = None) -> tuple[str, str]:
-    """(state, reason) aus einem JUnit-XML und optional dem pytest-Exit-Code."""
+def classify(report: Path, pytest_exit: int | None = None, not_started: str | None = None) -> tuple[str, str]:
+    """(state, reason) aus einem JUnit-XML und optional dem pytest-Exit-Code.
+
+    `not_started` schlaegt alles andere: Wurde pytest nie aufgerufen, sagt
+    weder der Report noch ein Exit-Code etwas ueber den Lauf.
+    """
+    if not_started:
+        return UNKNOWN, not_started
     if not report.is_file():
         return (
             UNKNOWN,
@@ -110,17 +131,28 @@ def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(prog="classify_live_run")
     ap.add_argument("report", type=Path, help="Pfad zum JUnit-XML von pytest")
     ap.add_argument("--pytest-exit", type=int, default=None)
+    ap.add_argument(
+        "--not-started",
+        default=None,
+        help="Grund, warum pytest gar nicht erst aufgerufen wurde. Setzt `unknown`.",
+    )
     args = ap.parse_args(argv)
 
-    state, reason = classify(args.report, args.pytest_exit)
+    state, reason = classify(args.report, args.pytest_exit, args.not_started)
     print(f"state={state}")
     print(f"reason={reason}")
 
     out = os.environ.get("GITHUB_OUTPUT")
     if out:
+        # Zeilenumbruch raus, bevor der Grund in `$GITHUB_OUTPUT` geht: Die
+        # `key=value`-Form endet an der ersten neuen Zeile, und was danach
+        # steht, liest der Runner als naechstes Output. Ein Grund aus einer
+        # Parser-Meldung oder aus `--not-started` koennte so ein `state=clear`
+        # nachschieben und den roten Lauf gruen faerben.
+        flat = " ".join(reason.split())
         with open(out, "a", encoding="utf-8") as fh:
             fh.write(f"state={state}\n")
-            fh.write(f"reason={reason}\n")
+            fh.write(f"reason={flat}\n")
     # Immer 0: Ueber rot oder gruen entscheidet der Workflow.
     return 0
 
