@@ -53,13 +53,19 @@ jobs:
         run: |
           set +e
           if [ -z "$IGE_USERNAME" ]; then
-            # Kein `exit 0`. Ohne Zugangsdaten entsteht kein JUnit-XML, die
-            # Einordnung meldet `unknown`, und der Job wird rot — weil dieser
-            # Lauf den Vertrag mit swissreg.ch nicht geprueft hat. Bisher
-            # meldete er an dieser Stelle Erfolg.
+            # Der Job wird trotzdem rot — dieser Lauf hat den Vertrag mit
+            # swissreg.ch nicht geprueft, und bis zum 28.8.2026 meldete er an
+            # dieser Stelle Erfolg. Rot wird er ueber `not_started` unten.
+            #
+            # Hier stand `pytest_exit=127`, ein geliehener Exit-Code fuer einen
+            # Aufruf, den es nie gab: Die Einordnung machte daraus «pytest ist
+            # nicht bis zum Schreiben gekommen (Exit 127)», also 127 =
+            # «command not found», also die Suche nach einem fehlenden Binary.
+            # Der Grund steht jetzt im Klartext und wird durchgereicht.
             echo "Keine IGE-Zugangsdaten konfiguriert — die Live-Suite wurde NICHT gefahren." \
               | tee live-output.txt
-            echo "pytest_exit=127" >> "$GITHUB_OUTPUT"
+            echo "not_started=Secret IGE_USERNAME ist im Repo nicht gesetzt — die Live-Suite wurde gar nicht erst gestartet. Geprueft wurde nichts." \
+              >> "$GITHUB_OUTPUT"
             exit 0
           fi
           pytest -m live -v --junitxml=live-report.xml 2>&1 | tee live-output.txt
@@ -72,9 +78,20 @@ jobs:
       # uebersprungen wurde, sieht unter jedem Exit-Code-Check aus wie Erfolg.
       - name: Ergebnis einordnen
         id: verdict
+        env:
+          PYTEST_EXIT: ${{ steps.suite.outputs.pytest_exit }}
+          NOT_STARTED: ${{ steps.suite.outputs.not_started }}
         run: |
-          python scripts/classify_live_run.py live-report.xml \
-            --pytest-exit "${{ steps.suite.outputs.pytest_exit }}"
+          # Genau eines von beidem ist gesetzt: entweder pytest lief (dann ein
+          # Exit-Code) oder es lief nicht (dann ein Grund). Ein leerer
+          # `--pytest-exit` waere kein Exit-Code, sondern ein Argparse-Fehler.
+          args=(live-report.xml)
+          if [ -n "$NOT_STARTED" ]; then
+            args+=(--not-started "$NOT_STARTED")
+          elif [ -n "$PYTEST_EXIT" ]; then
+            args+=(--pytest-exit "$PYTEST_EXIT")
+          fi
+          python scripts/classify_live_run.py "${args[@]}"
           {
             echo "tail<<PYTEST_TAIL"
             tail -n 40 live-output.txt || true
@@ -192,7 +209,14 @@ jobs:
       # Unterschied steht im Log, nicht im Exit-Code.
       - name: Ergebnis durchreichen
         if: steps.verdict.outputs.state != 'clear'
+        # Ueber `env` aus demselben Grund wie im Skript-Schritt darueber: Der
+        # Grund kann eine Parser-Meldung ueber eine fremde Datei enthalten, und
+        # `${{ }}` setzt sie vor dem Start woertlich in die Shell ein — ein
+        # `$(...)` oder ein Anfuehrungszeichen darin liefe mit.
+        env:
+          LIVE_STATE: ${{ steps.verdict.outputs.state }}
+          LIVE_REASON: ${{ steps.verdict.outputs.reason }}
         run: |
-          echo "Live-Suite: ${{ steps.verdict.outputs.state }}"
-          echo "${{ steps.verdict.outputs.reason }}"
+          echo "Live-Suite: $LIVE_STATE"
+          echo "$LIVE_REASON"
           exit 1

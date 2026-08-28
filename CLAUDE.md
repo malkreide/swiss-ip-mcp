@@ -290,3 +290,19 @@ Lokal stellt ihn keiner der Befehle oben nach.
 per `-m "not live"` ausgeschlossen — DRIFT-005 ist hier erfüllt. `schedule`
 greift nur auf dem Default-Branch (`main`): Änderungen am Workflow wirken erst
 nach dem Merge, vorher von Hand per `workflow_dispatch`.
+
+**Der Live-Job ist rot, und das ist die richtige Antwort.** Die Secrets
+`IGE_USERNAME` / `IGE_PASSWORD` sind im Repo nicht gesetzt; ohne sie
+überspringt jeder der vier Live-Tests (`skipif(not LIVE)`, `LIVE =
+bool(os.getenv("IGE_USERNAME"))`). Bis zum 24.8.2026 meldete der Job dafür
+Erfolg — zehn grüne wöchentliche Läufe, in denen nichts gegen swissreg.ch
+geprüft wurde. Seit `ab38c24` ist er rot. Grün wird er nicht durch eine
+Änderung an `live.yml`, sondern durch die Secrets.
+
+Die erste Fassung dieser Meldung war trotzdem falsch: Der Nicht-Lauf reichte
+`--pytest-exit 127` durch, und die Einordnung machte daraus «pytest ist nicht
+bis zum Schreiben gekommen (Exit 127)». 127 heisst «command not found» — der
+Job behauptete einen gescheiterten pytest-Aufruf, den es nie gab, und schickte
+den Leser hinter einem fehlenden Binary her. Wer einen Zustand meldet, den er
+selbst herbeigeführt hat, benennt ihn; ein geliehener Exit-Code ist kein Grund.
+Dafür gibt es jetzt `--not-started`.
