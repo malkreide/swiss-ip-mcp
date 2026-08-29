@@ -6,8 +6,6 @@ updates:
     schedule:
       interval: "monthly"
     open-pull-requests-limit: 5
-    labels:
-      - "dependencies"
     groups:
       mcp-sdk:
         patterns:
@@ -19,5 +17,3 @@ updates:
     directory: "/"
     schedule:
       interval: "monthly"
-    labels:
-      - "dependencies"
