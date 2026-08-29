@@ -192,13 +192,22 @@ jenem Morgen da war: Die Environment-Prüfung kommt erst dran, wenn die
 Kontingent-Prüfung durch ist. Es waren also mindestens zwei getrennte Episoden
 und nicht eine durchgehende Sperre seit dem 21.8.
 
-Über die Dauer der neuen sagt das nichts. Fünf Minuten später kam dieselbe
-Meldung noch einmal — PR #62 um 09:33:32, und wieder lagen zwischen «ready for
-review» und Merge drei Sekunden. Zwei Fehlschläge im Abstand von fünf Minuten
-belegen die Episode um 09:33 und sonst nichts: kein Anfang, kein Ende, und
-welches Limit greift, bleibt offen wie zuvor. Was sie sagen, ist: Ein Repo, in
-dem Codex gestern durchlief, ist kein Beleg für heute — und ein Vormittag
-keiner für den Nachmittag.
+Über die Dauer der neuen sagt das nichts. Drei PRs desselben Vormittags — #61,
+#62 und #63 — bekamen der Reihe nach dieselbe Meldung, die letzte um 09:37:53,
+und jeder Merge lag drei bis vier Sekunden nach «ready for review».
+
+Wie viele es an jenem Vormittag insgesamt waren, steht hier bewusst nicht. Jeder
+PR, der die Zahl nachträgt, löst beim Umschalten auf ready den nächsten
+Codex-Lauf aus und erzeugt damit die nächste Meldung: Der Satz ist überholt,
+bevor sein eigener Merge durch ist. Zweimal so geschehen — «eine einzige
+Beobachtung» hielt fünf Minuten, «zwei Fehlschläge» keine zwei. Eine Zahl, die
+sich beim Aufschreiben ändert, gehört nicht in einen Satz, der etwas belegen
+soll.
+
+Belegt ist, dass die Episode um 09:37 noch lief — kein Anfang, kein Ende, und
+welches Limit greift, bleibt offen wie zuvor. Und: Ein Repo, in dem Codex
+gestern durchlief, ist kein Beleg für heute; ein Vormittag keiner für den
+Nachmittag.
 
 Das Kontingent hängt am Konto, nicht am Repo, und Code-Reviews haben einen
 eigenen Topf — nur GitHub-getriggerte Reviews zählen hinein. ChatGPT-Pläne
