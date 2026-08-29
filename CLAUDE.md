@@ -71,8 +71,9 @@ You have reached your Codex usage limits for code reviews.
 
 Wie lange die Sperre dauerte, geben die Beobachtungen nur als Spanne her. Vier
 Zeitpunkte sind belegt: letzter gelungener Review am 21.8. um 08:41, erste
-Limit-Meldung um 09:48, letzte beobachtete Limit-Meldung am 22.8. um 11:03,
-erste *andere* Meldung am 23.8. um 08:22.
+Limit-Meldung um 09:48, letzte Limit-Meldung *jener Episode* am 22.8. um 11:03,
+erste *andere* Meldung am 23.8. um 08:22. (Am 29.8. kam wieder eine — die
+gehört zu einer anderen Episode und steht weiter unten.)
 
 Zwischen erster und letzter Limit-Meldung liegen **25 h 15 min**. Das ist der
 Abstand zweier Fehlschläge, nicht die Dauer einer Sperre. Wer ihn Untergrenze
@@ -172,6 +173,28 @@ mergen. Am 21./22.8. lagen zwischen «ready for review» und Merge mehrfach drei
 bis fünf Sekunden. Codex wird beim Umschalten von Draft auf ready ausgelöst und
 braucht danach Zeit; wer sofort mergt, hat das Häkchen gesetzt und den Review
 nicht abgewartet.
+
+Am 29.8.2026 traf beides denselben PR. In `swiss-ip-mcp` ging PR #61 um
+09:28:20 von Draft auf ready und war um 09:28:24 gemergt — vier Sekunden, genau
+das Muster oben. Die Kontingent-Meldung kam um 09:28:25, eine Sekunde nach dem
+Merge.
+
+Sie entlastet die vier Sekunden nicht. Belegt ist nur, dass die
+*Kontingent-Prüfung* fünf Sekunden nach dem Auslöser fertig ist; eine Absage
+ist billiger als ein Review, und wie lange ein wirklicher Review braucht, sagt
+sie nicht. Hier ist der Prüfer nur schon vorher an etwas anderem gescheitert.
+Wer zwei Gründe hat und einen abstellt, hat den Review noch nicht.
+
+**Und das Kontingent kommt wieder — und geht wieder.** Zwischen der letzten
+Meldung vom 22.8. und dieser vom 29.8. liegt die Environment-Meldung vom 23.8.
+um 08:22, und die belegt nach der Reihenfolge oben, dass das Kontingent an
+jenem Morgen da war: Die Environment-Prüfung kommt erst dran, wenn die
+Kontingent-Prüfung durch ist. Es waren also mindestens zwei getrennte Episoden
+und nicht eine durchgehende Sperre seit dem 21.8.
+
+Über die Dauer der neuen sagt das nichts — eine einzige Beobachtung, ohne
+Anfang und ohne Ende, und welches Limit greift, bleibt offen wie zuvor. Was es
+sagt, ist: Ein Repo, in dem Codex gestern durchlief, ist kein Beleg für heute.
 
 Das Kontingent hängt am Konto, nicht am Repo, und Code-Reviews haben einen
 eigenen Topf — nur GitHub-getriggerte Reviews zählen hinein. ChatGPT-Pläne
