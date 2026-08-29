@@ -294,10 +294,21 @@ nach dem Merge, vorher von Hand per `workflow_dispatch`.
 **Der Live-Job ist rot, und das ist die richtige Antwort.** Die Secrets
 `IGE_USERNAME` / `IGE_PASSWORD` sind im Repo nicht gesetzt; ohne sie
 überspringt jeder der vier Live-Tests (`skipif(not LIVE)`, `LIVE =
-bool(os.getenv("IGE_USERNAME"))`). Bis zum 24.8.2026 meldete der Job dafür
-Erfolg — zehn grüne wöchentliche Läufe, in denen nichts gegen swissreg.ch
-geprüft wurde. Seit `ab38c24` ist er rot. Grün wird er nicht durch eine
-Änderung an `live.yml`, sondern durch die Secrets.
+_live_enabled()`). Bis zum 24.8.2026 meldete der Job dafür Erfolg — zehn grüne
+wöchentliche Läufe, in denen nichts gegen swissreg.ch geprüft wurde. Seit
+`ab38c24` ist er rot. Grün wird er nicht durch eine Änderung an `live.yml`,
+sondern durch die Secrets. Wer die Fehlermeldung des Jobs für den Fehler hält
+und `live.yml` daraufhin repariert, repariert den Melder.
+
+**Ein halb gesetztes Secret ist schlimmer als gar keines.** Die Schranke im
+Workflow und die Marke in `tests/test_server.py` fragten beide allein nach
+`IGE_USERNAME`, `_load_credentials` verlangt aber Benutzername **und**
+Passwort. Wer nur den Benutzernamen setzt, kommt an beiden vorbei, die vier
+Live-Tests laufen los und fallen geschlossen an einem `ToolError` — und die
+Einordnung sieht Fehler im JUnit-XML, meldet `finding` und lässt ein Issue
+aufgehen, das swissreg.ch einen gebrochenen Vertrag unterstellt. Ein fehlendes
+Secret ist kein Befund über die Quelle; beides prüft jetzt beide Variablen,
+und der richtige Befund bleibt `unknown`.
 
 Die erste Fassung dieser Meldung war trotzdem falsch: Der Nicht-Lauf reichte
 `--pytest-exit 127` durch, und die Einordnung machte daraus «pytest ist nicht

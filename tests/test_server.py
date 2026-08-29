@@ -2,13 +2,14 @@
 Tests for swiss-ip-mcp server.
 
 Unit tests mock the IGE API; integration (smoke) tests require live credentials
-and are skipped automatically if IGE_USERNAME is not set.
+and are skipped automatically unless IGE_USERNAME *and* IGE_PASSWORD are set.
 """
 
 from __future__ import annotations
 
 import os
 import xml.etree.ElementTree as ET
+from collections.abc import Mapping
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -35,7 +36,26 @@ from swiss_ip_mcp.server import (
     swiss_ip_search_trademarks_by_owner,
 )
 
-LIVE = bool(os.getenv("IGE_USERNAME"))
+
+def _live_enabled(env: Mapping[str, str] | None = None) -> bool:
+    """Beide Zugangsdaten oder gar keine Live-Suite.
+
+    Die Marke hing bis zum 29.8.2026 allein am Benutzernamen, `_load_credentials`
+    verlangt aber beides. Wer nur `IGE_USERNAME` setzt, startet die Live-Tests
+    also mit halben Zugangsdaten; sie fallen dann samt und sonders an einem
+    `ToolError` aus `_load_credentials`, und `classify_live_run.py` sieht
+    Fehler im JUnit-XML und ordnet den Lauf als `finding` ein. Der geplante
+    Workflow macht daraufhin ein Issue auf, das swissreg.ch einen gebrochenen
+    Vertrag unterstellt — wegen eines Secrets, das hier fehlt.
+
+    Ein fehlendes Secret ist kein Befund ueber die Quelle. Fehlt eines, wird
+    uebersprungen, und `unknown` ist die richtige Antwort.
+    """
+    env = os.environ if env is None else env
+    return bool(env.get("IGE_USERNAME") and env.get("IGE_PASSWORD"))
+
+
+LIVE = _live_enabled()
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -974,6 +994,45 @@ class TestCredentialsSecret:
             srv._load_credentials()
 
 
+class TestLiveMarkerPrecondition:
+    """Die Vorbedingung der Live-Suite deckt sich mit der von `_load_credentials`.
+
+    Sonst laeuft die Suite mit halben Zugangsdaten los und meldet als Befund
+    ueber swissreg.ch, was ein fehlendes Secret im Repo ist.
+    """
+
+    def test_both_credentials_enable_live(self):
+        assert _live_enabled({"IGE_USERNAME": "u", "IGE_PASSWORD": "p"})
+
+    def test_username_alone_does_not_enable_live(self):
+        # Genau der Fall, den `_load_credentials` mit ValueError quittiert.
+        assert not _live_enabled({"IGE_USERNAME": "u"})
+
+    def test_password_alone_does_not_enable_live(self):
+        assert not _live_enabled({"IGE_PASSWORD": "p"})
+
+    def test_empty_values_do_not_enable_live(self):
+        # Ein leer gesetztes Secret ist ein nicht gesetztes: `secrets.X` liefert
+        # im Workflow einen leeren String, keine fehlende Variable.
+        assert not _live_enabled({"IGE_USERNAME": "u", "IGE_PASSWORD": ""})
+        assert not _live_enabled({})
+
+    def test_live_matches_load_credentials(self, monkeypatch):
+        # Die Gegenprobe zur Zusicherung selbst: Wo `_live_enabled` gruenes
+        # Licht gibt, kommt `_load_credentials` durch — und umgekehrt.
+        import swiss_ip_mcp.server as srv
+
+        for username, password in (("u", "p"), ("u", ""), ("", "p"), ("", "")):
+            env = {"IGE_USERNAME": username, "IGE_PASSWORD": password}
+            monkeypatch.setenv("IGE_USERNAME", username)
+            monkeypatch.setenv("IGE_PASSWORD", password)
+            if _live_enabled(env):
+                srv._load_credentials()
+            else:
+                with pytest.raises(ValueError, match="Zugangsdaten fehlen"):
+                    srv._load_credentials()
+
+
 class TestProgressReporting:
     @pytest.mark.asyncio
     async def test_call_api_reports_progress_with_ctx(self, monkeypatch):
@@ -1106,7 +1165,7 @@ class TestRespxHttpPath:
 
 
 @pytest.mark.live
-@pytest.mark.skipif(not LIVE, reason="IGE_USERNAME not set – skipping live tests")
+@pytest.mark.skipif(not LIVE, reason="IGE_USERNAME/IGE_PASSWORD not set – skipping live tests")
 class TestLiveApi:
     @pytest.mark.asyncio
     async def test_live_trademark_search(self):

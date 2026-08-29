@@ -40,8 +40,8 @@ bis zum Schreiben gekommen — auch das ist `unknown`, und zwar mit Grund.
 
 WENN PYTEST NIE GESTARTET WURDE, IST DER EXIT-CODE EINE ERFINDUNG
 -----------------------------------------------------------------
-Der Workflow bricht ab, bevor er pytest aufruft, wenn kein `IGE_USERNAME`
-gesetzt ist. Er meldete das bis zum 28.8.2026 als `--pytest-exit 127`, und
+Der Workflow bricht ab, bevor er pytest aufruft, wenn `IGE_USERNAME` oder
+`IGE_PASSWORD` fehlt. Er meldete das bis zum 28.8.2026 als `--pytest-exit 127`, und
 diese Einordnung machte daraus: «pytest ist nicht bis zum Schreiben gekommen
 (Exit 127)». 127 heisst «command not found» — der Satz behauptete also einen
 gescheiterten pytest-Aufruf, den es nie gab, und schickte den Leser hinter
