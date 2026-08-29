@@ -192,9 +192,13 @@ jenem Morgen da war: Die Environment-Prüfung kommt erst dran, wenn die
 Kontingent-Prüfung durch ist. Es waren also mindestens zwei getrennte Episoden
 und nicht eine durchgehende Sperre seit dem 21.8.
 
-Über die Dauer der neuen sagt das nichts — eine einzige Beobachtung, ohne
-Anfang und ohne Ende, und welches Limit greift, bleibt offen wie zuvor. Was es
-sagt, ist: Ein Repo, in dem Codex gestern durchlief, ist kein Beleg für heute.
+Über die Dauer der neuen sagt das nichts. Fünf Minuten später kam dieselbe
+Meldung noch einmal — PR #62 um 09:33:32, und wieder lagen zwischen «ready for
+review» und Merge drei Sekunden. Zwei Fehlschläge im Abstand von fünf Minuten
+belegen die Episode um 09:33 und sonst nichts: kein Anfang, kein Ende, und
+welches Limit greift, bleibt offen wie zuvor. Was sie sagen, ist: Ein Repo, in
+dem Codex gestern durchlief, ist kein Beleg für heute — und ein Vormittag
+keiner für den Nachmittag.
 
 Das Kontingent hängt am Konto, nicht am Repo, und Code-Reviews haben einen
 eigenen Topf — nur GitHub-getriggerte Reviews zählen hinein. ChatGPT-Pläne
