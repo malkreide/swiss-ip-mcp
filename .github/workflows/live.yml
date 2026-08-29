@@ -52,7 +52,18 @@ jobs:
           IGE_PASSWORD: ${{ secrets.IGE_PASSWORD }}
         run: |
           set +e
-          if [ -z "$IGE_USERNAME" ]; then
+          # Beide Secrets, nicht nur das erste: `_load_credentials` verlangt
+          # Benutzername UND Passwort. Diese Schranke fragte bis zum 29.8.2026
+          # allein nach `IGE_USERNAME` — mit gesetztem Benutzernamen und
+          # fehlendem Passwort lief die Suite los, fiel geschlossen an einem
+          # `ToolError` aus `_load_credentials`, und die Einordnung sah Fehler
+          # im JUnit-XML und meldete `finding`. Der Schritt darunter haette
+          # dann ein Issue aufgemacht, das swissreg.ch einen gebrochenen
+          # Vertrag unterstellt — wegen eines Secrets, das hier fehlt.
+          missing=""
+          if [ -z "$IGE_USERNAME" ]; then missing="IGE_USERNAME"; fi
+          if [ -z "$IGE_PASSWORD" ]; then missing="${missing:+$missing und }IGE_PASSWORD"; fi
+          if [ -n "$missing" ]; then
             # Der Job wird trotzdem rot — dieser Lauf hat den Vertrag mit
             # swissreg.ch nicht geprueft, und bis zum 28.8.2026 meldete er an
             # dieser Stelle Erfolg. Rot wird er ueber `not_started` unten.
@@ -62,9 +73,9 @@ jobs:
             # nicht bis zum Schreiben gekommen (Exit 127)», also 127 =
             # «command not found», also die Suche nach einem fehlenden Binary.
             # Der Grund steht jetzt im Klartext und wird durchgereicht.
-            echo "Keine IGE-Zugangsdaten konfiguriert — die Live-Suite wurde NICHT gefahren." \
+            echo "Unvollstaendige IGE-Zugangsdaten ($missing fehlt) — die Live-Suite wurde NICHT gefahren." \
               | tee live-output.txt
-            echo "not_started=Secret IGE_USERNAME ist im Repo nicht gesetzt — die Live-Suite wurde gar nicht erst gestartet. Geprueft wurde nichts." \
+            echo "not_started=Im Repo fehlt: $missing. Die Live-Suite wurde gar nicht erst gestartet. Geprueft wurde nichts." \
               >> "$GITHUB_OUTPUT"
             exit 0
           fi
