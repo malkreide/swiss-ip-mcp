@@ -412,7 +412,10 @@ wie der Code: Nichts ist rot, weil nichts geprüft wird, worauf es ankommt.
 ## Teil 2 — Dieses Repo
 
 
-**ruff: eine Quelle.** `pyproject.toml`, `dev`-Extra, `ruff==0.16.3`. Die CI
+**ruff: eine Quelle.** `pyproject.toml`, `dev`-Extra, ein exakter
+`ruff==`-Pin — die Version dort nachlesen, nicht hier: Diese Zeile nannte sie
+wörtlich und stand am 8.9.2026 auf `0.16.3`, während `pyproject.toml` längst
+`0.16.4` führte. Eine zweite Quelle in einem Absatz namens «eine Quelle». Die CI
 hat keinen eigenen Pin-Schritt — der Install über `ci.yml` genügt, lokal wie
 dort. Eine `.pre-commit-config.yaml` gibt es nicht; wenn eine dazukommt, muss
 sie dieselbe Version aus `pyproject.toml` beziehen und keine zweite nennen.
@@ -504,3 +507,21 @@ Job behauptete einen gescheiterten pytest-Aufruf, den es nie gab, und schickte
 den Leser hinter einem fehlenden Binary her. Wer einen Zustand meldet, den er
 selbst herbeigeführt hat, benennt ihn; ein geliehener Exit-Code ist kein Grund.
 Dafür gibt es jetzt `--not-started`.
+
+Und die zweite Fassung sagte «Unvollständige IGE-Zugangsdaten» auch dann, wenn
+gar nichts gesetzt war — also im einzigen Fall, den das Repo tatsächlich hat.
+Der Absatz darüber lebt vom Unterschied zwischen halb und gar nicht, die
+Meldung ebnete ihn wieder ein: Wer «unvollständig» liest, sucht die zweite
+Hälfte eines Secrets, das nie eine erste hatte. Der Text nennt jetzt beide
+Lagen getrennt.
+
+**Und der Melder selbst kann sich überschreiben.** Der Schritt «Ergebnis
+einordnen» hängte die letzten vierzig Zeilen der pytest-Ausgabe über einen
+Heredoc mit dem festen Trennwort `PYTEST_TAIL` an `$GITHUB_OUTPUT` an — in
+dieselbe Datei, in die `classify_live_run.py` eine Zeile vorher `state=` und
+`reason=` geschrieben hat. Steht in der Ausgabe eine Zeile `PYTEST_TAIL`, endet
+der Block dort, und der Runner liest den Rest als weitere Outputs. Nachgestellt
+am 8.9.2026: aus `state=unknown` wurde `state=clear`, der rote Lauf wäre grün
+geworden und hätte das offene Issue geschlossen. Die pytest-Ausgabe ist fremder
+Text — dieselbe Begründung, die im Skript-Schritt darunter schon zweimal steht,
+nur eine Ebene tiefer. Das Trennwort wird jetzt je Lauf zufällig gezogen.
