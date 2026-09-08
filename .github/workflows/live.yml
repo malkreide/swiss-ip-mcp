@@ -61,8 +61,15 @@ jobs:
           # dann ein Issue aufgemacht, das swissreg.ch einen gebrochenen
           # Vertrag unterstellt — wegen eines Secrets, das hier fehlt.
           missing=""
-          if [ -z "$IGE_USERNAME" ]; then missing="IGE_USERNAME"; fi
-          if [ -z "$IGE_PASSWORD" ]; then missing="${missing:+$missing und }IGE_PASSWORD"; fi
+          fehlend=0
+          if [ -z "$IGE_USERNAME" ]; then
+            missing="IGE_USERNAME"
+            fehlend=$((fehlend + 1))
+          fi
+          if [ -z "$IGE_PASSWORD" ]; then
+            missing="${missing:+$missing und }IGE_PASSWORD"
+            fehlend=$((fehlend + 1))
+          fi
           if [ -n "$missing" ]; then
             # Der Job wird trotzdem rot — dieser Lauf hat den Vertrag mit
             # swissreg.ch nicht geprueft, und bis zum 28.8.2026 meldete er an
@@ -73,9 +80,24 @@ jobs:
             # nicht bis zum Schreiben gekommen (Exit 127)», also 127 =
             # «command not found», also die Suche nach einem fehlenden Binary.
             # Der Grund steht jetzt im Klartext und wird durchgereicht.
-            echo "Unvollstaendige IGE-Zugangsdaten ($missing fehlt) — die Live-Suite wurde NICHT gefahren." \
+            #
+            # «Unvollstaendig» galt bis zum 8.9.2026 auch dann, wenn gar nichts
+            # gesetzt war. Das sind zwei verschiedene Lagen, und der Unterschied
+            # ist der, um den es im Absatz darueber ueberhaupt geht: Fehlt eine
+            # Haelfte, hat jemand ein Secret halb eingetragen und sucht die
+            # andere Haelfte; fehlen beide, hat nie jemand eines eingetragen. Wer
+            # den zweiten Fall als «unvollstaendig» liest, sucht eine Haelfte,
+            # die es nicht gibt.
+            if [ "$fehlend" -eq 2 ]; then
+              lage="Keine IGE-Zugangsdaten gesetzt"
+              verb="fehlen"
+            else
+              lage="Unvollstaendige IGE-Zugangsdaten"
+              verb="fehlt"
+            fi
+            echo "$lage ($missing $verb) — die Live-Suite wurde NICHT gefahren." \
               | tee live-output.txt
-            echo "not_started=Im Repo fehlt: $missing. Die Live-Suite wurde gar nicht erst gestartet. Geprueft wurde nichts." \
+            echo "not_started=Im Repo $verb: $missing. Die Live-Suite wurde gar nicht erst gestartet. Geprueft wurde nichts." \
               >> "$GITHUB_OUTPUT"
             exit 0
           fi
@@ -103,10 +125,20 @@ jobs:
             args+=(--pytest-exit "$PYTEST_EXIT")
           fi
           python scripts/classify_live_run.py "${args[@]}"
+          # Zufaelliges Trennwort, nicht das feste `PYTEST_TAIL`: Der Block
+          # darunter haengt fremden Text an dieselbe Datei, in die der Aufruf
+          # darueber gerade `state=` und `reason=` geschrieben hat. Steht in der
+          # pytest-Ausgabe eine Zeile, die genau dem Trennwort entspricht, endet
+          # der Block dort — und was danach kommt, liest der Runner als weitere
+          # Outputs. Ein `state=clear` aus einer Assertion-Meldung faerbte so
+          # einen roten Lauf gruen und schloesse das offene Issue. Das ist
+          # dieselbe Falle wie bei `${{ }}` im Skript-Schritt darunter, nur eine
+          # Ebene tiefer.
+          delim="PYTEST_TAIL_$(od -An -tx1 -N16 /dev/urandom | tr -d ' \n')"
           {
-            echo "tail<<PYTEST_TAIL"
+            echo "tail<<$delim"
             tail -n 40 live-output.txt || true
-            echo "PYTEST_TAIL"
+            echo "$delim"
           } >> "$GITHUB_OUTPUT"
 
       - name: Issue oeffnen, aktualisieren oder schliessen
