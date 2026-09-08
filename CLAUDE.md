@@ -304,6 +304,27 @@ bekannten Schubladen zu zwingen: Dieser Abschnitt musste schon einmal von drei
 auf vier Gründe wachsen, und die 👍-Reaktion stand hier zwei Fassungen lang als
 Tatsache.
 
+**Seit dem 8.9.2026 gibt es eine fünfte Form, und sie ändert ihren Sinn im
+Lauf.** Codex setzt einen Statuskommentar «Codex Review Summary» mit einer
+Tabelle aus Review, Status, Commit und Auslöser. Auf PR #73 stand dort um
+04:13:04 `🔄 Running` und um 04:14:23 `✅ Completed` — **derselbe Kommentar**,
+bloss bearbeitet: eine `id`, `created_at` fest, `updated_at` nachgezogen. Der
+Zähler bleibt bei `comments: 1`, und diesmal reicht auch der Text nicht: Er ist
+eine Momentaufnahme, kein Befund. Wer ihn im Moment eines schnellen Merges
+liest, liest `Running` — und das heisst gar nichts.
+
+Für die Frage, **ob** geprüft wurde, ist die Tabelle trotzdem ein dritter
+Beleg neben Review-Objekt und Befundlos-Meldung: Sie nennt Commit und
+Abschlusszeit.
+Für die Frage, **wie** es ausging, ist sie keiner. `Completed` ohne
+Befundlos-Meldung sagt, dass ein Lauf zu Ende kam, nicht dass er nichts fand.
+
+Der Infokasten nennt inzwischen zwei Reaktionen — 👀 während des Laufs, 👍 am
+befundlosen Ende. Auf #73 kam **keine von beiden** (`reactions: 0`), bei einem
+Lauf, der laut derselben Tabelle sauber durchgelaufen ist. Der Kasten war schon
+zweimal keine Quelle und ist es weiterhin nicht; dass er jetzt zwei
+Behauptungen trägt statt einer, macht ihn nicht besser.
+
 Und ein befundloser Lauf ist kein Freispruch. Am 23.8. lief derselbe Text durch
 42 Reviews: 36 meldeten denselben P2-Befund, 6 die Befundlos-Meldung — gleiche
 Eingabe, gegenteiliges Urteil, alles in denselben neun Minuten. Ein sauberer
@@ -335,6 +356,45 @@ Sie entlastet die vier Sekunden nicht. Belegt ist nur, dass die
 ist billiger als ein Review, und wie lange ein wirklicher Review braucht, sagt
 sie nicht. Hier ist der Prüfer nur schon vorher an etwas anderem gescheitert.
 Wer zwei Gründe hat und einen abstellt, hat den Review noch nicht.
+
+**Am 8.9.2026 ist es gemessen.** Wieder in `swiss-ip-mcp`, wieder wenige
+Sekunden zwischen Freigabe und Merge: PR #73. Diesmal war das Kontingent da,
+und der Prüfer lief wirklich an.
+
+```
+04:12:52/53  Draft → ready (der Auslöser)
+04:12:56     Merge            (merged_at)
+04:13:00.98  Codex startet den Review auf 8aff614
+04:14:22.39  Codex meldet «Completed»
+```
+
+Der Review begann **fünf Sekunden nach dem Merge** und war **86 Sekunden**
+danach fertig; er selbst lief 81 Sekunden. Damit ist die Frage des Absatzes
+darüber für einen Fall beantwortet, und nur für den: ein Diff über zwei
+Dateien, 60 Zeilen zu 7. Ein grösserer braucht eher mehr. Wer daraus eine
+Wartezeit ableitet, hat aus einer Messung eine Regel gemacht; sie ist die
+Untergrenze für diesen einen PR, sonst nichts.
+
+**Die Uhr, an der man das abliest, muss die richtige sein.** Die Freigabezeit
+oben trägt bewusst einen Schrägstrich: Sie stammt aus der Zustellung eines
+Webhook-Ereignisses, und dieselbe Zustellung datierte den Merge auf 04:12:57,
+während GitHubs eigenes `merged_at` 04:12:56 sagt — eine Sekunde daneben. Bei
+Abständen von drei, vier Sekunden entscheidet das über die Aussage. Die
+Codex-Zeiten und `merged_at` kommen aus der API, die Freigabe nicht; deshalb
+steht hier keine glatte Zahl für «ready bis Merge», sondern drei bis vier
+Sekunden.
+
+Für die älteren Sekundenangaben in diesem Abschnitt — die vier Sekunden am
+21./22.8., die vier bei #61 — ist das nicht nachgeholt: `merged_at` kommt in
+diesem Abschnitt erst hier vor. Sie bleiben stehen, weil die Aussage «zu
+schnell gemergt» eine Sekunde hin oder her nicht trägt; wer sie aber gegen 86
+Sekunden rechnen will, prüft sie vorher gegen die API.
+
+Verloren ging hier kein Befund — der Review postete keinen. Verloren ging das
+Gate: Gemergt wurde, bevor feststand, ob es einen gibt. Das ist der Unterschied,
+den die Checkliste im PR-Template nicht sieht; sie war formal abgehakt. Und ob
+ein Review auf einem schon geschlossenen PR derselbe ist wie auf einem offenen,
+prüft dieser Lauf nicht mit — er meldete `Completed`, mehr steht nicht fest.
 
 **Und das Kontingent kommt wieder — und geht wieder.** Zwischen der letzten
 Meldung vom 22.8. und dieser vom 29.8. liegt die Environment-Meldung vom 23.8.
