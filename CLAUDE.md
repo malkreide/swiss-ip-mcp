@@ -396,6 +396,46 @@ den die Checkliste im PR-Template nicht sieht; sie war formal abgehakt. Und ob
 ein Review auf einem schon geschlossenen PR derselbe ist wie auf einem offenen,
 prüft dieser Lauf nicht mit — er meldete `Completed`, mehr steht nicht fest.
 
+**Keine zwanzig Minuten später dasselbe, auf dem PR, der genau das
+festhielt.** #74 trug diesen Abschnitt nach und ging denselben Weg:
+
+```
+04:31:19     Draft → ready (Zustellzeit, siehe oben)
+04:31:22     Merge            (merged_at)
+04:31:30.46  Codex startet den Review auf 1ace034
+04:32:51.75  Codex meldet «Completed»
+```
+
+Nebeneinander:
+
+```
+      Merge→Start   Laufzeit   Merge→fertig
+#73      5.0 s       81.4 s       86.4 s
+#74      8.5 s       81.3 s       89.7 s
+```
+
+Der Vorlauf unterscheidet sich um dreieinhalb Sekunden, die Laufzeit auf die
+Zehntelsekunde nicht. Das sieht nach festem Zeitbudget aus statt nach Arbeit,
+die mit dem Umfang wächst — belegt ist es nicht: Beide Diffs sind gleich gross
+(60 Zeilen zu 7 in zwei Dateien, 60 zu 0 in einer). Zwei Messungen derselben
+Grössenordnung können nicht unterscheiden, ob die Zeit am Umfang hängt.
+Entscheiden würde ein Diff anderer Grössenordnung; bis dahin bleibt «ein
+grösserer braucht eher mehr» eine Vermutung und keine Messung — auch nachdem
+jetzt zweimal gemessen wurde.
+
+Was die zweite Messung trägt, ist das Muster: Zweimal begann der Prüfer **nach**
+dem Merge, nie davor. Und beide Male postete er nichts — kein Review-Objekt,
+keine Befundlos-Meldung, `reactions: 0`. Der Infokasten verspricht damit ein
+drittes Mal eine Reaktion, die nicht kommt.
+
+**Die Startzeit ist nur im Lauf ablesbar.** Beide `Merge→Start`-Werte stammen
+aus einer Abfrage, die den Statuskommentar traf, solange er noch «Running
+since …» zeigte. Er wird an Ort und Stelle bearbeitet, und der fertige Text
+nennt allein die Abschlusszeit: Die Startzeit ist überschrieben und aus der API
+nicht mehr zu holen. Die fünfte Form ändert also nicht bloss ihren Sinn im Lauf,
+sie löscht die frühere Lesung. Wer den Vorlauf messen will, muss hinsehen,
+während der Review läuft.
+
 **Und das Kontingent kommt wieder — und geht wieder.** Zwischen der letzten
 Meldung vom 22.8. und dieser vom 29.8. liegt die Environment-Meldung vom 23.8.
 um 08:22, und die belegt nach der Reihenfolge oben, dass das Kontingent an
