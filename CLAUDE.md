@@ -414,6 +414,10 @@ Nebeneinander:
 #74      8.5 s       81.3 s       89.7 s
 ```
 
+**Der nächste Absatz ist am Tag darauf überholt worden — die dritte Messung
+weiter unten hat ihn umgestossen.** Er bleibt trotzdem stehen: Wie die Vermutung
+entstand und woran sie zerbrach, ist hier der Lehrsatz, nicht die Vermutung.
+
 Der Vorlauf unterscheidet sich um dreieinhalb Sekunden, die Laufzeit auf die
 Zehntelsekunde nicht. Das sieht nach festem Zeitbudget aus statt nach Arbeit,
 die mit dem Umfang wächst — belegt ist es nicht: Beide Diffs sind gleich gross
@@ -435,6 +439,46 @@ nennt allein die Abschlusszeit: Die Startzeit ist überschrieben und aus der API
 nicht mehr zu holen. Die fünfte Form ändert also nicht bloss ihren Sinn im Lauf,
 sie löscht die frühere Lesung. Wer den Vorlauf messen will, muss hinsehen,
 während der Review läuft.
+
+**Und genau das hat die dritte Messung am 9.9.2026 möglich gemacht — die dann
+die zweite umgestossen hat.** #75 trug den Vorbehalt oben nach und wurde
+wieder nach wenigen Sekunden gemergt; diesmal wurde der Statuskommentar
+abgefragt, solange er noch lief, und die Startzeit war da:
+
+```
+03:13:56     Draft → ready (Zustellzeit)
+03:14:01     Merge            (merged_at)
+03:14:03.28  Codex startet den Review auf 70e8ad3
+03:15:40.95  Codex meldet «Completed»
+```
+
+Alle drei nebeneinander, mit dem Umfang des jeweiligen Diffs:
+
+```
+      Diff              Merge→Start   Laufzeit   Merge→fertig
+#73   2 Dateien, 60/7      5.0 s       81.4 s       86.4 s
+#74   1 Datei,   60/0      8.5 s       81.3 s       89.7 s
+#75   1 Datei,   40/0      2.3 s       97.7 s       99.9 s
+```
+
+**Das feste Zeitbudget ist damit weg.** Zwei gleiche Laufzeiten waren eine
+Koinzidenz, keine Konstante; die dritte liegt 16 Sekunden darüber. Und der
+Verdacht kippt gleich doppelt: Der **kleinste** Diff der drei brauchte am
+längsten. Damit ist auch «ein grösserer braucht eher mehr» in dieser
+Grössenordnung nicht bloss unbelegt, sondern widerlegt — was ein wirklich
+grosser Diff tut, ist weiter offen, und dieser Satz beansprucht nicht mehr als
+das. Der Vorlauf streut über den Faktor vier (2,3 bis 8,5 Sekunden) und war nie
+das Stabile daran.
+
+Der Reihe nach: Eine Messung liess die Frage offen, zwei erzeugten ein Muster,
+drei haben es zerlegt. Wer nach der zweiten aufgehört und «festes Budget»
+notiert hätte, stünde jetzt mit einem falschen Satz da — die Vorsicht im
+Absatz darüber war kein Zierrat.
+
+Was drei Messungen stützen, ist einzig das Muster, um das es hier geht: **Der
+Prüfer begann dreimal nach dem Merge, nie davor.** Und dreimal postete er
+nichts — kein Review-Objekt, keine Befundlos-Meldung, `reactions: 0`. Die
+Reaktion, die der Infokasten verspricht, fehlt damit zum vierten Mal.
 
 **Und das Kontingent kommt wieder — und geht wieder.** Zwischen der letzten
 Meldung vom 22.8. und dieser vom 29.8. liegt die Environment-Meldung vom 23.8.
