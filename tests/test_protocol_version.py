@@ -28,10 +28,18 @@ Nachgemessen statt aus Konstantennamen geschlossen: die Aushandlung steht in
 
 — sie haengt an keinem Transport, gilt also fuer stdio ebenso wie fuer HTTP.
 
-Ohne gemessenen Teil: dieses Repo baut keine ASGI-App, durch die sich ein
-`initialize` schicken liesse. Die Zusicherungen unten haengen deshalb an den
-SDK-Konstanten. Das ist die schwaechere Form, und sie steht hier benannt statt
-unausgesprochen.
+Was diese Datei zusichert und was nicht: Die Zusicherungen unten haengen an den
+SDK-Konstanten — sie fangen den Dependabot-Bump, der eine Revision verschiebt,
+und sonst nichts. Der gemessene Teil steht in `tests/test_modern_era.py`, der
+echte Anfragen beider Aeren durch die zusammengebaute ASGI-App schickt.
+
+Hier stand bis dahin, dieses Repo baue keine ASGI-App, durch die sich ein
+`initialize` schicken liesse, und die SDK-Konstanten seien deshalb «die
+schwaechere Form, benannt statt unausgesprochen». Der zweite Halbsatz stimmte,
+der erste nicht: `_build_http_app()` baut eine, und `tests/test_cors.py`
+schickte seit je Anfragen hindurch. Eine benannte Schwaeche mit falscher
+Begruendung ist schlimmer als eine unbenannte — sie sieht nach einer
+abgewogenen Entscheidung aus und haelt vom Nachmessen ab.
 """
 
 from __future__ import annotations

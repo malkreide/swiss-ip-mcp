@@ -34,10 +34,15 @@ from swiss_ip_mcp.telemetry import setup_telemetry, traced_tool
 
 from . import __version__
 
+# Eine Quelle fuer die Projektadresse: sie geht sowohl im User-Agent an die
+# Datenquelle als auch als `websiteUrl` in die Server-Identitaet des Protokolls.
+# Zweimal getippt waere sie zweimal zu pflegen.
+PROJECT_URL = "https://github.com/malkreide/swiss-ip-mcp"
+
 # Wer fragt hier an? Ohne eigenen User-Agent geht der httpx-Default
 # hinaus und der Betreiber der Datenquelle sieht bloss eine Bibliothek.
 # Die Version stammt aus den Paket-Metadaten und kann nicht driften.
-USER_AGENT = f"swiss-ip-mcp/{__version__} (+https://github.com/malkreide/swiss-ip-mcp)"
+USER_AGENT = f"swiss-ip-mcp/{__version__} (+{PROJECT_URL})"
 # ---------------------------------------------------------------------------
 # Logging (structured JSON on stderr — OBS-003)
 # ---------------------------------------------------------------------------
@@ -550,8 +555,26 @@ CACHE_HINTS = {
     "server/discover": CacheHint(ttl_ms=LIST_CACHE_TTL_MS, scope="public"),
 }
 
+# SEP-2575, Spec 2026-07-28: die Server-Identitaet steht nicht mehr einmalig im
+# `initialize`-Ergebnis, sondern in JEDEM Resultat unter
+# `_meta["io.modelcontextprotocol/serverInfo"]` — «servers SHOULD identify
+# themselves in each result's `_meta`».
+#
+# `version` hat im SDK den Default `""`, und der galt hier. Gemessen durch den
+# zusammengebauten ASGI-Stack meldete dieser Server in BEIDEN Aeren
+# `{"name": "swiss_ip_mcp", "version": ""}` — ein Server, der sich bei jedem
+# Aufruf als versionslos ausweist. Dass die Nummer im Haus war, macht es
+# schlimmer, nicht besser: `__version__` steht seit je im User-Agent, den die
+# Datenquelle sieht. Die Gegenstelle des Protokolls bekam sie nie.
+#
+# `website_url` ist das zweite Identitaetsfeld derselben Revision. `icons`
+# bleibt leer: dieses Repo liefert kein Icon-Asset aus, und ein Feld auf eine
+# Adresse zeigen zu lassen, hinter der nichts liegt, waere schlechter als es
+# wegzulassen.
 mcp = MCPServer(
     "swiss_ip_mcp",
+    version=__version__,
+    website_url=PROJECT_URL,
     cache_hints=CACHE_HINTS,
     instructions=(
         "Swiss IP MCP Server provides access to Swiss intellectual property "

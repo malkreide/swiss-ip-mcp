@@ -136,7 +136,13 @@ AI client (Claude Desktop, Cursor, VS Code + Continue, …)
 |-----------|----------|---------------|
 | **stdio** | Claude Desktop, local development | Default (no extra setup) |
 | **Streamable HTTP** | Cloud deployment (Render.com etc.) | `MCP_TRANSPORT=streamable-http` |
-| **SSE** | Legacy HTTP clients | `MCP_TRANSPORT=sse` |
+| **SSE** | Legacy HTTP clients — *deprecated* | `MCP_TRANSPORT=sse` |
+
+> **SSE is deprecated.** Protocol revision `2026-07-28` reclassified the
+> HTTP+SSE transport as Deprecated under the feature lifecycle policy (SEP-2596;
+> it had been soft-deprecated since `2025-03-26`). It stays available here for
+> the twelve-month deprecation window — new deployments should use
+> `MCP_TRANSPORT=streamable-http`.
 
 Transport is selected at startup from the `MCP_TRANSPORT` environment variable
 (default `stdio`). The HTTP transports are served by uvicorn and honour:
@@ -315,13 +321,29 @@ other era is refused.
 Both revisions are pinned in
 [`tests/test_protocol_version.py`](tests/test_protocol_version.py) and asserted
 against the installed SDK, so a Dependabot bump of `mcp` cannot move either one
-silently. This server builds no ASGI app to send an `initialize` through, so
-the gate asserts the SDK constants rather than a measured response — the
-weaker form, named rather than left unsaid.
+silently.
+
+On top of that, [`tests/test_modern_era.py`](tests/test_modern_era.py) **measures**
+both eras: it sends real requests — a `2026-07-28` `_meta` envelope with the
+`Mcp-Method` / `Mcp-Protocol-Version` routing headers, and a legacy
+`initialize` — through the assembled ASGI app and asserts what comes back.
+Earlier revisions of this section claimed the opposite ("this server builds no
+ASGI app to send an `initialize` through"), and that was never true:
+`_build_http_app()` builds one, and `tests/test_cors.py` had been sending
+requests through it all along. The gate rested on SDK constants for a reason
+that did not hold.
 
 Note that the SDK's `LATEST_PROTOCOL_VERSION` is an alias for the **modern**
 era, not for the handshake era — pinning against it alone would leave the era
 that current clients actually negotiate free to drift.
+
+### Server identity
+
+Under `2026-07-28` the server identifies itself in **every** result's `_meta`
+(`io.modelcontextprotocol/serverInfo`, SEP-2575), not once in an `initialize`
+response. This server reports its package version and `websiteUrl` there; it
+carried the SDK default of an empty `version` string until that was measured
+and fixed. `icons` is deliberately unset — the repo ships no icon asset.
 
 **Update policy.** When the gate fails, do not edit the constant blindly: read
 the spec changelog between the two revisions, verify the server still behaves,
