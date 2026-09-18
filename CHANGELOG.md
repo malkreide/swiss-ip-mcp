@@ -7,6 +7,26 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Behoben
 
+- **Der Server wies sich als versionslos aus.** `MCPServer` hat fuer `version`
+  den Vorgabewert `""`, und der galt hier. Unter Spec `2026-07-28` steht die
+  Server-Identitaet nicht mehr einmalig im `initialize`-Ergebnis, sondern nach
+  SEP-2575 in **jedem** Resultat unter
+  `_meta["io.modelcontextprotocol/serverInfo"]` — gemessen durch den
+  zusammengebauten ASGI-Stack meldete dieser Server in beiden Aeren
+  `{"name": "swiss_ip_mcp", "version": ""}`. Dass die Nummer im Haus war, macht
+  es schlimmer: `__version__` steht seit je im User-Agent, den die Datenquelle
+  sieht — nur die Gegenstelle des Protokolls bekam sie nie. Jetzt melden beide
+  Aeren die Paketversion, dazu `websiteUrl`. `icons` bleibt ungesetzt, weil das
+  Repo kein Icon-Asset ausliefert.
+
+- **Der Protokoll-Pin sicherte SDK-Konstanten mit einer Begruendung, die nicht
+  trug.** Beide READMEs und der Docstring von `tests/test_protocol_version.py`
+  erklaerten den fehlenden Messteil damit, dieses Repo baue keine ASGI-App,
+  durch die sich ein `initialize` schicken liesse. `_build_http_app()` baut
+  genau eine, und `tests/test_cors.py` schickte seit je Anfragen hindurch. Eine
+  benannte Schwaeche mit falscher Begruendung sieht nach einer abgewogenen
+  Entscheidung aus und haelt vom Nachmessen ab.
+
 - **Browser-Clients scheiterten am Preflight.** Spec `2026-07-28` routet eine
   Streamable-HTTP-Anfrage ueber `Mcp-Method`, `Mcp-Name` und
   `Mcp-Protocol-Version`; die CORS-Freigabeliste nannte keinen davon, dafuer
@@ -28,7 +48,40 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   `mcp.server.mcpserver`, und `mcp` 2.x bedient beide Aeren nebeneinander.
   Beide Fassungen beschreiben jetzt dasselbe, gegen ein Gate gehalten.
 
+### Veraltet
+
+- **Der SSE-Transport ist als veraltet gekennzeichnet.** Die Revision
+  `2026-07-28` stuft HTTP+SSE unter der Feature-Lifecycle-Politik als
+  Deprecated ein (SEP-2596); weich veraltet war er seit `2025-03-26`.
+  `MCP_TRANSPORT=sse` funktioniert unveraendert und bleibt fuer das
+  zwoelfmonatige Auslauffenster bestehen — entfernt wird hier nichts, aber
+  beide READMEs sagen es jetzt, statt den Transport gleichrangig neben
+  Streamable HTTP zu fuehren.
+
+### Entfernt
+
+- **`fastmcp` als Abhaengigkeit.** Nichts unter `src/` oder `tests/` hat sie je
+  importiert; der Kommentar in `pyproject.toml` behauptete das Gegenteil
+  («this server imports `mcp.server.fastmcp` directly»), was vor der Migration
+  auf die 2.x-API stimmte und mit ihr still falsch wurde. Vor dem Entfernen
+  gemessen: `mcp` haengt nicht an `fastmcp` und `fastmcp` nicht an `mcp`, und
+  die Suite ist ohne sie gruen. Die Obergrenze `mcp<3` bleibt, ihre Begruendung
+  ist neu geschrieben.
+
 ### Hinzugefuegt
+
+- **Die Modern-Aera wird gemessen, nicht behauptet** (`tests/test_modern_era.py`):
+  echte Anfragen durch die zusammengebaute ASGI-App — `_meta`-Envelope plus die
+  Routing-Header `Mcp-Method` / `Mcp-Protocol-Version` — gegen `server/discover`,
+  `tools/list`, `prompts/list`, `resources/list` und
+  `resources/templates/list`. Zugesichert sind die Server-Identitaet je Methode,
+  `resultType: "complete"` (SEP-2322), das Ankommen der Frischehinweise auf der
+  Leitung (SEP-2549) und der `UnsupportedProtocolVersionError` `-32022` samt
+  `supported`-Liste, ueber die ein Client sich korrigieren kann. Dazu die
+  Gegenprobe, dass ein halber moderner Request — ohne Envelope oder ohne
+  Routing-Header — nicht bedient wird: `tools/list` gibt es in beiden Aeren, ein
+  gruenes `tools/list` allein belegt also nichts. Das Legacy-`initialize` wird
+  daneben ebenfalls gemessen.
 
 - **Frischehinweise auf den auflistenden Methoden** (SEP-2549, Spec
   `2026-07-28`): `tools/list`, `resources/list`, `resources/templates/list`,

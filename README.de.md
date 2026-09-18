@@ -137,7 +137,13 @@ KI-Client (Claude Desktop, Cursor, VS Code + Continue, …)
 |-----------|---------|---------------|
 | **stdio** | Claude Desktop, lokale Entwicklung | Standard (kein Zusatzaufwand) |
 | **Streamable HTTP** | Cloud-Deployment, Render.com | `MCP_TRANSPORT=streamable-http` |
-| **SSE** | Legacy-HTTP-Clients | `MCP_TRANSPORT=sse` |
+| **SSE** | Legacy-HTTP-Clients — *veraltet* | `MCP_TRANSPORT=sse` |
+
+> **SSE ist veraltet.** Die Protokollrevision `2026-07-28` hat den
+> HTTP+SSE-Transport unter der Feature-Lifecycle-Politik als Deprecated
+> eingestuft (SEP-2596; weich veraltet war er seit `2025-03-26`). Er bleibt hier
+> fuer das zwoelfmonatige Auslauffenster verfuegbar — neue Deployments nehmen
+> `MCP_TRANSPORT=streamable-http`.
 
 Der Transport wird beim Start aus der Umgebungsvariable `MCP_TRANSPORT`
 gewählt (Standard `stdio`). Die HTTP-Transporte laufen unter uvicorn und
@@ -308,13 +314,29 @@ aus der jeweils anderen Aera wird abgewiesen.
 Beide Revisionen sind in
 [`tests/test_protocol_version.py`](tests/test_protocol_version.py) gepinnt und
 werden gegen das installierte SDK geprueft; ein Dependabot-Bump von `mcp` kann
-also keine der beiden still verschieben. Dieser Server baut keine ASGI-App, durch die sich ein `initialize`
-schicken liesse; das Gate sichert deshalb die SDK-Konstanten statt einer
-gemessenen Antwort — die schwaechere Form, benannt statt verschwiegen.
+also keine der beiden still verschieben.
+
+Daneben **misst** [`tests/test_modern_era.py`](tests/test_modern_era.py) beide
+Aeren: Er schickt echte Anfragen durch die zusammengebaute ASGI-App — einen
+`2026-07-28`-`_meta`-Envelope samt den Routing-Headern `Mcp-Method` und
+`Mcp-Protocol-Version`, und ein Legacy-`initialize` — und sichert zu, was
+zurueckkommt. Frueher stand hier das Gegenteil («Dieser Server baut keine
+ASGI-App, durch die sich ein `initialize` schicken liesse»), und das stimmte
+nie: `_build_http_app()` baut genau eine, und `tests/test_cors.py` schickte seit
+je Anfragen hindurch. Das Gate ruhte auf einer Begruendung, die nicht trug.
 
 Zu beachten: `LATEST_PROTOCOL_VERSION` im SDK ist ein Alias auf die **moderne**
 Aera, nicht auf die Handshake-Aera — wer nur dagegen pinnt, laesst genau die
 Aera frei wandern, die heutige Clients tatsaechlich aushandeln.
+
+### Server-Identitaet
+
+Unter `2026-07-28` weist sich der Server in **jedem** Resultat im `_meta` aus
+(`io.modelcontextprotocol/serverInfo`, SEP-2575) und nicht mehr einmalig in
+einer `initialize`-Antwort. Dieser Server meldet dort seine Paketversion und
+`websiteUrl`; bis zur Messung trug er den SDK-Vorgabewert — eine leere
+Versionszeichenkette. `icons` bleibt bewusst ungesetzt: das Repo liefert kein
+Icon-Asset aus.
 
 **Update-Politik.** Faellt das Gate, die Konstante nicht blind nachziehen: erst
 das Spec-Changelog zwischen den beiden Revisionen lesen, pruefen, ob sich der

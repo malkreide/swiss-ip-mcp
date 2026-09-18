@@ -1,6 +1,6 @@
 version: 2
 updates:
-  # Python dependencies (mcp / fastmcp SDK, httpx, pydantic, …)
+  # Python dependencies (mcp SDK, httpx, pydantic, …)
   - package-ecosystem: "pip"
     directory: "/"
     schedule:
@@ -10,7 +10,7 @@ updates:
       mcp-sdk:
         patterns:
           - "mcp"
-          - "fastmcp"
+          - "mcp-types"
 
   # GitHub Actions used in CI / publish workflows
   - package-ecosystem: "github-actions"
