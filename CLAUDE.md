@@ -647,6 +647,49 @@ diesen Merge auf 12:48:23, `merged_at` sagt 12:48:21 — **zwei** Sekunden, bei
 herausrechnen. Bei einem Abstand von zwei Sekunden zwischen Freigabe und Merge
 entscheidet sie darüber, ob überhaupt eine Reihenfolge behauptet werden kann.
 
+**Die siebte Messung ist die erste, bei der die Regel dieses Abschnitts
+befolgt wurde.** #81 trug die sechste Messung ein und wurde nach der Freigabe
+liegen gelassen, bis der Statuskommentar `Completed` zeigte:
+
+```
+13:03:17     Draft → ready (Zustellzeit)
+13:03:23.58  Codex startet den Review auf 6c44a4e
+13:05:17.54  Codex meldet «Completed»
+13:09:24     Merge            (merged_at)   — 4 min 6 s nach «Completed»
+```
+
+Nach #74, #79 und #80, wo jeweils vor dem Abschluss gemergt wurde, ist das der
+erste Fall, in dem beim Merge feststand, dass es nichts zu beheben gibt (es gab
+nichts: kein Review-Objekt, keine Befundlos-Meldung, `reactions: 0`). Bei #77
+stand es auch fest, aber ohne Absicht — dort lag zufällig genug Zeit dazwischen.
+Damit ist die Regel einmal angewandt und kostet, was sie hier kostete: gut vier
+Minuten Warten, von denen zwei der Review selbst brauchte.
+
+**Und sie entschärft die Umfangsfrage weiter.** Alle sieben:
+
+```
+      Diff                  Laufzeit   Merge
+#80   1 Datei,    60/6       67.8 s    vor dem Review-Start
+#74   1 Datei,    60/0       81.3 s    vor dem Review-Start
+#73   2 Dateien,  60/7       81.4 s    vor dem Review-Start
+#75   1 Datei,    40/0       97.7 s    vor dem Review-Start
+#79   1 Datei,    64/0      104.1 s    mitten im Lauf
+#81   2 Dateien,  70/1      114.0 s    nach «Completed» (abgewartet)
+#77   8 Dateien, 514/24     154.4 s    nach «Completed» (zufällig)
+```
+
+Die kleinen Diffs (40 bis 70 Zeilen) streuen jetzt zwischen 67,8 und 114,0
+Sekunden — Faktor 1,68 statt 1,54. Entscheidender ist der direkte Vergleich:
+**#77 hat den 7,6-fachen Umfang von #81, aber nur die 1,35-fache Laufzeit.** Der
+grosse Diff liegt damit nicht mehr klar ausserhalb dessen, was kleine Diffs
+untereinander streuen.
+
+Das ist die vierte Verschiebung der Deutung in dieser Reihe und die zweite in
+dieselbe Richtung. Nach sieben Messungen ist die sauberste Aussage: Die Laufzeit
+streut stark, und der Umfang erklärt sie in dieser Spanne nicht. Was ein Diff
+von tausend Zeilen täte, ist weiter offen — und ein Satz darüber wäre schon
+wieder mehr, als hier gemessen wurde.
+
 **Und das Kontingent kommt wieder — und geht wieder.** Zwischen der letzten
 Meldung vom 22.8. und dieser vom 29.8. liegt die Environment-Meldung vom 23.8.
 um 08:22, und die belegt nach der Reihenfolge oben, dass das Kontingent an
