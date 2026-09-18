@@ -480,6 +480,70 @@ Prüfer begann dreimal nach dem Merge, nie davor.** Und dreimal postete er
 nichts — kein Review-Objekt, keine Befundlos-Meldung, `reactions: 0`. Die
 Reaktion, die der Infokasten verspricht, fehlt damit zum vierten Mal.
 
+**Die vierte Messung am 18.9.2026 nimmt die Verallgemeinerung aus diesem Satz
+zurück — und den Verdacht über den Umfang wieder auf.** Der Satz selbst bleibt
+wahr: jene drei Läufe begannen nach dem Merge. Falsch wäre nur, daraus etwas
+über den Prüfer zu lesen, und genau das legt er nahe. #77 in `swiss-ip-mcp`
+war der Diff anderer Grössenordnung, den der Absatz oben als offen benennt:
+acht Dateien, 514 Zeilen zu 24, gegen 60/7, 60/0 und 40/0 bei den drei davor.
+Und er wurde **nicht** sofort gemergt.
+
+```
+10:35:32     Draft → ready (Zustellzeit)
+10:35:42.87  Codex startet den Review auf e9bb37f
+10:38:17.27  Codex meldet «Completed»
+10:39:45     Merge            (merged_at)
+```
+
+Die Laufzeit ist die einzige Grösse, die über alle vier sauber definiert ist —
+sie steht bei jeder in Codex' eigenen Zeitstempeln. «Merge→Start» gibt es hier
+nicht, weil der Merge danach kam; die Tabelle oben bleibt deshalb stehen, wie
+sie ist, statt eine Spalte zu bekommen, die für eine Zeile keinen Wert hat:
+
+```
+      Diff                  Laufzeit
+#73   2 Dateien,  60/7        81.4 s
+#74   1 Datei,    60/0        81.3 s
+#75   1 Datei,    40/0        97.7 s
+#77   8 Dateien, 514/24      154.4 s
+```
+
+**Was sie nicht hergibt: die Ursache.** Gegenüber den drei davor sind ZWEI
+Dinge anders — der Umfang und der Umstand, dass kein Merge vorausging. Welches
+von beiden die 154 Sekunden macht, trennt diese Messung nicht, und «ein
+grösserer braucht eher mehr» ist damit wieder eine Vermutung, nicht mehr eine
+widerlegte. Nach der Lehre des Absatzes darüber — zwei Werte ergaben ein
+Muster, das der dritte zerlegte — wäre es genau der Fehler, aus der vierten
+jetzt eine Regel zu machen. Zwei Variablen auf einmal zu bewegen war
+unvermeidlich: Der PR wurde gemergt, als er fertig war, nicht als ein Versuch
+es verlangte.
+
+**Der Prüfer begann diesmal vor dem Merge und war vor ihm fertig** — 87,7
+Sekunden vor ihm. Damit ist klar, was das Muster «dreimal nach dem Merge» in
+Wahrheit war: keine Eigenschaft des Prüfers, sondern der Schatten des
+Mergens nach drei bis fünf Sekunden. Sobald nicht sofort gemergt wird, steht
+der Befund vor dem Merge fest. Der Abschnitt dokumentiert also nicht, dass
+Codex spät kommt, sondern dass hier zu früh gemergt wurde — und das ist der
+Satz, um den es die ganze Zeit ging.
+
+Verloren ging diesmal nichts. Das Gate hielt: Beim Merge stand fest, dass es
+keinen Befund gibt.
+
+**Aber «kein Befund» ist auch hier nicht «geprüft und sauber».** Abgefragt
+wurden beide Seiten — `get_reviews` kam leer zurück, unter den Kommentaren
+stand allein die Statustabelle. Es fehlt also auch die Befundlos-Meldung, und
+damit gilt weiter, was oben steht: `Completed` belegt, **dass** ein Lauf zu
+Ende kam, nicht **dass** er nichts fand. `reactions: 0` zum vierten Mal in
+Folge; die Reaktion, die der Infokasten verspricht, fehlt damit zum fünften
+Mal insgesamt.
+
+Zwei Handgriffe aus dem Absatz darüber haben sich bezahlt gemacht. Die
+Startzeit war da, weil während des Laufs nachgesehen wurde — eine Abfrage
+nach dem Abschluss hätte nur noch die Abschlusszeit gezeigt. Und die
+Mergezeit wurde aus der API nachgeholt statt aus der Zustellung genommen: die
+Webhook-Zustellung des `closed`-Ereignisses nannte 10:39:46, `merged_at` sagt
+10:39:45. Wieder eine Sekunde, wieder in dieselbe Richtung.
+
 **Und das Kontingent kommt wieder — und geht wieder.** Zwischen der letzten
 Meldung vom 22.8. und dieser vom 29.8. liegt die Environment-Meldung vom 23.8.
 um 08:22, und die belegt nach der Reihenfolge oben, dass das Kontingent an
