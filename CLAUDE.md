@@ -598,6 +598,55 @@ davor gingen ohne aus, und ihr `reactions: 0` steht oben. Hier kam die 👍 nich
 zustande, weil es etwas zu melden gab — was der Infokasten ja so beschreibt;
 über die vier Fälle davor sagt das nichts.
 
+**Die sechste Messung schwächt den Umfangsverdacht wieder ab — und der
+Abschnitt wiederholt sich zum dritten Mal an sich selbst.** #80 trug die
+Korrektur oben ein, also gerade den Satz «sicher erst bei `Completed`», und
+wurde zwei Sekunden nach der Freigabe gemergt:
+
+```
+12:48:19     Draft → ready (Zustellzeit)
+12:48:21     Merge            (merged_at)
+12:48:26.24  Codex startet den Review auf 366994f   — 5.2 s nach dem Merge
+12:49:34.04  Codex meldet «Completed»               — 73.0 s nach dem Merge
+```
+
+Nach #74 und #79 ist das der dritte PR dieser Reihe, der genau das tut, wovor
+er warnt. Diesmal fiel nichts hindurch — kein Review-Objekt, keine
+Befundlos-Meldung, `reactions: 0` —, aber das war Glück und keine Vorsicht.
+
+**67,8 Sekunden, die kürzeste Laufzeit der Reihe.** Alle sechs:
+
+```
+      Diff                  Laufzeit   Merge
+#80   1 Datei,    60/6       67.8 s    vor dem Review-Start
+#74   1 Datei,    60/0       81.3 s    vor dem Review-Start
+#73   2 Dateien,  60/7       81.4 s    vor dem Review-Start
+#75   1 Datei,    40/0       97.7 s    vor dem Review-Start
+#79   1 Datei,    64/0      104.1 s    mitten im Lauf
+#77   8 Dateien, 514/24     154.4 s    nach «Completed»
+```
+
+Fünf Diffs derselben Grössenordnung (40 bis 64 Zeilen) streuen damit zwischen
+67,8 und 104,1 Sekunden — Faktor 1,54. #77 liegt mit 154,4 Sekunden zwar über
+allen, aber nur beim 1,8-fachen des Mittels dieser Gruppe (86,5 s), bei rund
+zehnfachem Umfang. Was die fünfte Messung an «es lag am Umfang» gestützt hatte,
+ist damit wieder schwächer: Wo eine einzelne Grössenordnung um die Hälfte
+streut, trägt ein einzelner grosser Wert wenig. Widerlegt ist der Verdacht
+nicht, belegt auch nicht — er steht, wo er seit der zweiten Messung steht.
+
+Das ist das dritte Mal, dass eine neue Messung die Deutung der vorigen
+verschiebt: erst fiel das «feste Zeitbudget», dann kippte «der kleinste brauchte
+am längsten», jetzt frisst die Streubreite den Umfangsverdacht wieder an. Wer
+an irgendeinem dieser Punkte aufgehört hätte, stünde mit einem Satz da, den die
+nächste Messung umwirft. Genau deshalb steht hier eine Messreihe und keine
+Regel.
+
+Und die Uhrenwarnung von oben verschärft sich: Die Webhook-Zustellung datierte
+diesen Merge auf 12:48:23, `merged_at` sagt 12:48:21 — **zwei** Sekunden, bei
+#77 war es eine. Die Abweichung ist also nicht konstant und lässt sich nicht
+herausrechnen. Bei einem Abstand von zwei Sekunden zwischen Freigabe und Merge
+entscheidet sie darüber, ob überhaupt eine Reihenfolge behauptet werden kann.
+
 **Und das Kontingent kommt wieder — und geht wieder.** Zwischen der letzten
 Meldung vom 22.8. und dieser vom 29.8. liegt die Environment-Meldung vom 23.8.
 um 08:22, und die belegt nach der Reihenfolge oben, dass das Kontingent an
