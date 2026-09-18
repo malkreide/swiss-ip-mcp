@@ -521,12 +521,19 @@ es verlangte.
 **Der Prüfer begann diesmal vor dem Merge und war vor ihm fertig** — 87,7
 Sekunden vor ihm. Damit ist klar, was das Muster «dreimal nach dem Merge» in
 Wahrheit war: keine Eigenschaft des Prüfers, sondern der Schatten des
-Mergens nach drei bis fünf Sekunden. Sobald nicht sofort gemergt wird, steht
-der Befund vor dem Merge fest. Der Abschnitt dokumentiert also nicht, dass
-Codex spät kommt, sondern dass hier zu früh gemergt wurde — und das ist der
-Satz, um den es die ganze Zeit ging.
+Mergens nach drei bis fünf Sekunden. Der Abschnitt dokumentiert also nicht,
+dass Codex spät kommt, sondern dass hier zu früh gemergt wurde — und das ist
+der Satz, um den es die ganze Zeit ging.
 
-Verloren ging diesmal nichts. Das Gate hielt: Beim Merge stand fest, dass es
+**Sicher ist der Merge erst, wenn der Statuskommentar `Completed` zeigt** —
+nicht schon, wenn nicht «sofort» gemergt wird. Hier stand der zweite Satz,
+und er war falsch: #77 belegt nur, dass ein Merge 87,7 Sekunden NACH dem
+`Completed` sicher war, nicht dass irgendein Zögern genügt. Wer «nicht sofort»
+als ein paar Sekunden liest, mergt mitten in einen Lauf, der allein hier 154
+Sekunden brauchte — und hat die Lücke wieder, gegen die der ganze Abschnitt
+geschrieben ist.
+
+Verloren ging bei #77 nichts. Das Gate hielt: Beim Merge stand fest, dass es
 keinen Befund gibt.
 
 **Aber «kein Befund» ist auch hier nicht «geprüft und sauber».** Abgefragt
@@ -543,6 +550,53 @@ nach dem Abschluss hätte nur noch die Abschlusszeit gezeigt. Und die
 Mergezeit wurde aus der API nachgeholt statt aus der Zustellung genommen: die
 Webhook-Zustellung des `closed`-Ereignisses nannte 10:39:46, `merged_at` sagt
 10:39:45. Wieder eine Sekunde, wieder in dieselbe Richtung.
+
+**Die fünfte Messung hat den Satz darüber widerlegt, bevor die Tinte trocken
+war — und diesmal ging wirklich ein Befund verloren.** #79 trug den Nachtrag
+oben ein, wurde freigegeben und 26,6 Sekunden später gemergt. «Nicht sofort»
+im Sinne der falschen Fassung, und trotzdem mitten im Lauf:
+
+```
+12:34:03     Draft → ready (Zustellzeit)
+12:34:13.45  Codex startet den Review auf 1c51158
+12:34:40     Merge            (merged_at)   — 26.6 s nach dem Start
+12:35:57.52  Codex meldet «Completed»       — 77.5 s nach dem Merge
+```
+
+Und der Befund, den Codex 77 Sekunden nach dem Merge postete, war **genau
+dieser Satz**: ein P2 auf `CLAUDE.md`, der sagt, die Regel müsse an
+`Completed` hängen und nicht an «nicht sofort», sonst mergt jemand nach ein
+paar Sekunden in einen laufenden Review hinein. Der Prüfer hat den Fehler also
+an dem PR gefunden, der ihn einführte, und der Merge kam vorher. Vier Läufe
+lang hiess es hier «verloren ging kein Befund, verloren ging das Gate»; beim
+fünften war das Gate offen und ein Befund fiel hindurch.
+
+Alle fünf nebeneinander:
+
+```
+      Diff                  Laufzeit   Merge
+#73   2 Dateien,  60/7        81.4 s   vor dem Review-Start
+#74   1 Datei,    60/0        81.3 s   vor dem Review-Start
+#75   1 Datei,    40/0        97.7 s   vor dem Review-Start
+#77   8 Dateien, 514/24      154.4 s   nach «Completed»
+#79   1 Datei,    64/0       104.1 s   mitten im Lauf
+```
+
+**Was #79 zur Umfangsfrage beiträgt, ist wenig, aber es ist das Richtige.**
+Der Absatz oben liess offen, ob die 154 Sekunden von #77 am Umfang lagen oder
+am fehlenden vorausgegangenen Merge. #79 bewegt die zweite Variable zurück —
+hier wurde mitten im Lauf gemergt — und landet trotzdem bei 104 Sekunden, nahe
+bei den anderen kleinen Diffs, nicht bei 154. Das schwächt die Erklärung «es
+lag am Merge-Zustand» ab und lässt den Umfang als den plausibleren Kandidaten
+stehen. Bewiesen ist er damit nicht: fünf Werte, vier davon aus einer einzigen
+Grössenordnung, und die streuen dort schon zwischen 81 und 104 Sekunden. Der
+Satz bleibt, was er seit der zweiten Messung ist — eine Vermutung.
+
+Der Vollständigkeit halber, weil der Abschnitt sonst eine Form unterschlägt:
+Dies ist der erste Lauf dieser Reihe mit einem **Review-Objekt**. Die vier
+davor gingen ohne aus, und ihr `reactions: 0` steht oben. Hier kam die 👍 nicht
+zustande, weil es etwas zu melden gab — was der Infokasten ja so beschreibt;
+über die vier Fälle davor sagt das nichts.
 
 **Und das Kontingent kommt wieder — und geht wieder.** Zwischen der letzten
 Meldung vom 22.8. und dieser vom 29.8. liegt die Environment-Meldung vom 23.8.
