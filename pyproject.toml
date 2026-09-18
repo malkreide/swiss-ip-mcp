@@ -31,7 +31,23 @@ dependencies = [
     # silently became false with it. Measured before removing: `mcp` does not
     # depend on `fastmcp` (nor `fastmcp` on `mcp` — it pulls `fastmcp-slim`), so
     # neither was holding the other up, and the suite is green without it.
-    "mcp[cli]>=2.0.0,<3",
+    #
+    # Ohne `[cli]`: Das Extra liefert einzig den `mcp`-Konsolenbefehl
+    # (`mcp -> mcp.cli:app [cli]`), und `typer`/`python-dotenv` kommen im ganzen
+    # SDK nur in `mcp/cli/cli.py` vor. Dieser Server ruft ihn nie auf, kein Pfad
+    # unter `src/`, `tests/` oder `scripts/` importiert eines der beiden, und
+    # weder README noch Dockerfile noch `server.json` nennen `mcp dev/install/run`.
+    # Gemessen mit `pip install --dry-run --ignore-installed`: mit Extra 36
+    # Pakete, ohne 28 — acht ueberzaehlige (typer, python-dotenv, rich, pygments,
+    # markdown-it-py, mdurl, shellingham, annotated-doc, zusammen rund 15 MB).
+    # Die traegt sonst jede Produktivinstallation mit, denn das Dockerfile macht
+    # `pip install .` und README wie `server.json` starten per `uvx`.
+    # Gegenprobe ohne die beiden: Import, alle sechs Gates, 161 Tests, der
+    # Streamable-HTTP-Transport und der stdio-Start liefen unveraendert.
+    # Positivkontrolle, damit das keine Vermutung ueber einen wirkungslosen
+    # Schluessel ist: `mcp version` bricht dann mit «typer is required».
+    # Wer den Befehl will, bekommt ihn ueber das `dev`-Extra unten.
+    "mcp>=2.0.0,<3",
     "httpx>=0.27.0",
     "pydantic>=2.0.0",
     # Imported directly by the HTTP/SSE transport (MCP_TRANSPORT=sse|streamable-http).
@@ -58,6 +74,10 @@ dev = [
     # Version aendern, `ruff format` einmal ueber die gelinteten Pfade laufen
     # lassen und das Ergebnis mit committen.
     "ruff==0.16.7",
+    # Der `mcp`-Konsolenbefehl (`mcp dev` fuer den Inspector). Er steht hier und
+    # nicht in `dependencies`: ein Entwicklungswerkzeug, das der ausgelieferte
+    # Server nie aufruft — siehe die Messung im Kommentar dort.
+    "mcp[cli]>=2.0.0,<3",
     "pytest>=8.0.0",
     "pytest-asyncio>=0.23.0",
     "respx>=0.21.0",
