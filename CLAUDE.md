@@ -714,6 +714,54 @@ welches Limit greift, bleibt offen wie zuvor. Und: Ein Repo, in dem Codex
 gestern durchlief, ist kein Beleg für heute; ein Vormittag keiner für den
 Nachmittag.
 
+**Die dritte Episode, am 18.9.2026 — und der Übergang so eng eingegrenzt wie
+noch nie.** Der letzte gelungene Lauf war #81, fertig um 13:05:17.54. Der
+nächste Auslöser, #82 um 13:44:53, traf auf:
+
+```
+You have reached your Codex usage limits for code reviews. You can see your
+limits in the Codex usage dashboard.
+```
+
+Die Meldung trägt `created_at` 13:44:56, also rund drei Sekunden nach der
+Freigabe — dieselbe Grössenordnung wie die fünf Sekunden bei #61 und damit ein
+zweiter Beleg dafür, dass die Absage viel billiger ist als ein Review.
+
+Zwischen dem letzten Erfolg und der ersten Meldung liegen **39 Minuten 38
+Sekunden**. Das ist weiterhin die Spanne zwischen zwei Beobachtungen und keine
+Messung des Kipppunkts — aber sie ist enger als alles Bisherige (am 21.8. waren
+es 67 Minuten), und in dieser Spanne hat diese Sitzung keinen einzigen
+Auslöser erzeugt. Das Kontingent fiel also entweder mit Verzögerung durch die
+Läufe davor oder durch Aktivität ausserhalb dieses Repos; beides passt, keines
+ist belegt.
+
+**Diesmal stand die Meldung schon da, als gemergt wurde.** `merged_at` ist
+13:44:57, eine Sekunde NACH der Meldung. Bei #61 war es umgekehrt — dort kam
+sie eine Sekunde zu spät, um noch etwas zu verhindern. Hier hätte ein Blick
+genügt. Gemergt wurde trotzdem, und der PR ging ungeprüft durch.
+
+**Neu und nachgemessen: Bei erschöpftem Kontingent fehlt der Statuskommentar
+ganz.** Auf #82 kam allein die Textmeldung — `get_reviews` leer, und unter den
+Kommentaren keine Spur der fünften Form. Die «Codex Review Summary» erscheint
+also nur, wenn der Review wirklich anläuft, und taugt damit als Anzeiger dafür,
+dass die Kontingentprüfung durch ist. Das bestätigt die Reihenfolge, die oben
+aus zwei Meldungen desselben Repos abgeleitet wurde, nun aus einer dritten
+Richtung: Die fünfte Form ist erst seit dem 8.9. beobachtet und lag noch nie
+neben einer Kontingent-Meldung.
+
+**Was die Läufe kosteten, soweit es dieses Repo hergibt.** An jenem Tag liefen
+hier vier Reviews vollständig durch — #77, #79, #80 und #81 — zusammen 440
+Sekunden, gut siebeneinhalb Minuten. Alle vier gehörten zu derselben Messreihe,
+die diesen Abschnitt füllt: Jeder Nachtrag war ein PR, jeder PR ein Auslöser.
+Der Verdacht, dass die Messreihe ihr eigenes Messinstrument aufgebraucht hat,
+liegt damit nahe — belegt ist er nicht, denn das Kontingent hängt am Konto und
+nicht am Repo, und welches Limit griff, steht im Dashboard und nicht in der
+Meldung.
+
+Eine Zählung, die dabei sauber ist: Der Dependabot-PR #78 desselben Tages löste
+**keinen** Lauf aus (weder Kommentar noch Review-Objekt). Wer die Auslöser
+zählt, zählt also nicht die PRs.
+
 Das Kontingent hängt am Konto, nicht am Repo, und Code-Reviews haben einen
 eigenen Topf — nur GitHub-getriggerte Reviews zählen hinein. ChatGPT-Pläne
 fahren ein rollendes Fünf-Stunden-Fenster plus Wochenlimits; welches greift,
