@@ -260,6 +260,7 @@ fällt trotzdem bei `ruff format --check` um.
 
 ```
 python scripts/check_ruff_pin.py
+actionlint -verbose
 ruff check src/ tests/ scripts/
 ruff format --check src/ tests/ scripts/
 python -m py_compile src/swiss_ip_mcp/server.py
@@ -277,7 +278,7 @@ Wer ihn prüfen will, zählt nach statt hier abzulesen:
 `ruff check src/ tests/ scripts/ --show-files | wc -l`.
 
 Der `py_compile`-Schritt fehlte hier, obwohl der Block «wörtlich» heisst — er
-steht in `ci.yml` zwischen Format-Check und Tests. Alle fünf laufen im Job
+steht in `ci.yml` zwischen Format-Check und Tests. Alle Schritte laufen im Job
 `quality` auf allen drei Versionen, keine `if:`-Ausnahme; ein
 `fail-fast: false` steht nicht da.
 
@@ -357,5 +358,14 @@ machte die Datei ungültig. Das Symptom sieht nicht nach Syntaxfehler aus: Jeder
 Push erzeugte einen roten Lauf ohne einen einzigen Job, benannt nach dem
 Dateipfad statt «Live Tests» — obwohl `live.yml` gar keinen `push`-Auslöser hat.
 Der eigentliche Schaden war leise: Die Wochenläufe vom 14.9. und 21.9. fanden
-gar nicht statt. `yaml.safe_load` merkt davon nichts; `actionlint` schon
-(`pip install actionlint-py`, dann `actionlint .github/workflows/*.yml`).
+gar nicht statt. `yaml.safe_load` merkt davon nichts; `actionlint` schon — es
+steht deshalb seit dem 25.9.2026 als Gate in `ci.yml`, exakt gepinnt im
+`dev`-Extra wie ruff.
+
+**actionlint prüft nur so viel, wie im `PATH` liegt.** Für die `run:`-Blöcke
+ruft es `shellcheck` auf und für Python-Blöcke `pyflakes`; fehlt eines, schaltet
+es die Regel ab und endet trotzdem mit 0. Der Runner bringt ein shellcheck mit,
+ein Laptop meist keines — deshalb ist `shellcheck-py` mit im `dev`-Extra.
+`pyflakes` fehlt auf beiden Seiten gleich, die Regel ist also überall aus.
+Wer wissen will, was tatsächlich lief, liest die `Rule … was disabled`-Zeilen
+von `actionlint -verbose`, statt aus dem grünen Haken zu schliessen.
