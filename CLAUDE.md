@@ -348,3 +348,14 @@ am 8.9.2026: aus `state=unknown` wurde `state=clear`, der rote Lauf wäre grün
 geworden und hätte das offene Issue geschlossen. Die pytest-Ausgabe ist fremder
 Text — dieselbe Begründung, die im Skript-Schritt darunter schon zweimal steht,
 nur eine Ebene tiefer. Das Trennwort wird jetzt je Lauf zufällig gezogen.
+
+**Keine Ausdrucks-Klammern in Kommentaren innerhalb von `run:`.** GitHub wertet
+`${{ … }}` im ganzen `run:`-Block aus, auch in Zeilen, die für die Shell
+Kommentare sind; YAML-Kommentare ausserhalb des Blocks sind unkritisch. Ein
+leeres Paar in einem Shell-Kommentar von `live.yml` (seit `8aff614`, 8.9.2026)
+machte die Datei ungültig. Das Symptom sieht nicht nach Syntaxfehler aus: Jeder
+Push erzeugte einen roten Lauf ohne einen einzigen Job, benannt nach dem
+Dateipfad statt «Live Tests» — obwohl `live.yml` gar keinen `push`-Auslöser hat.
+Der eigentliche Schaden war leise: Die Wochenläufe vom 14.9. und 21.9. fanden
+gar nicht statt. `yaml.safe_load` merkt davon nichts; `actionlint` schon
+(`pip install actionlint-py`, dann `actionlint .github/workflows/*.yml`).

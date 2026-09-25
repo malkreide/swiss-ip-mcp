@@ -132,8 +132,14 @@ jobs:
           # der Block dort — und was danach kommt, liest der Runner als weitere
           # Outputs. Ein `state=clear` aus einer Assertion-Meldung faerbte so
           # einen roten Lauf gruen und schloesse das offene Issue. Das ist
-          # dieselbe Falle wie bei `${{ }}` im Skript-Schritt darunter, nur eine
-          # Ebene tiefer.
+          # dieselbe Falle wie bei den Ausdrucks-Klammern im Skript-Schritt
+          # darunter, nur eine Ebene tiefer.
+          #
+          # Die Klammern hier nicht ausschreiben: Innerhalb eines `run:`-Blocks
+          # wertet GitHub sie auch in Shell-Kommentaren aus. Ein leeres Paar an
+          # dieser Stelle machte die ganze Datei ab dem 8.9.2026 ungueltig —
+          # jeder Push erzeugte einen roten Lauf ohne Job, und der Wochenlauf
+          # fiel still aus.
           delim="PYTEST_TAIL_$(od -An -tx1 -N16 /dev/urandom | tr -d ' \n')"
           {
             echo "tail<<$delim"
