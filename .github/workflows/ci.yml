@@ -33,6 +33,17 @@ jobs:
       - name: Ruff-Pin (PATH und Modul gegen pyproject.toml)
         run: python scripts/check_ruff_pin.py
 
+      # YAML-gueltig heisst nicht Workflow-gueltig. Ein leeres Ausdrucks-
+      # Klammerpaar in einem Shell-Kommentar von live.yml machte die Datei ab
+      # dem 8.9.2026 ungueltig: jeder Push ein roter Lauf ohne Job, und die
+      # geplanten Live-Laeufe fielen 17 Tage lang still aus. Keiner der
+      # Schritte hier bemerkte es, weil keiner die Workflows las.
+      #
+      # Ohne Argument: actionlint findet `.github/workflows/` selbst und
+      # prueft jede Datei darin, auch eine neu hinzugekommene.
+      - name: Workflows pruefen (actionlint)
+        run: actionlint -verbose
+
       - name: Lint with ruff
         run: ruff check src/ tests/ scripts/
 

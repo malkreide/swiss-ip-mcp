@@ -74,6 +74,14 @@ dev = [
     # Version aendern, `ruff format` einmal ueber die gelinteten Pfade laufen
     # lassen und das Ergebnis mit committen.
     "ruff==0.16.7",
+    # actionlint aus demselben Grund exakt gepinnt, und shellcheck gleich mit:
+    # actionlint ruft shellcheck fuer jeden `run:`-Block auf, wenn es im PATH
+    # liegt, und ueberspringt die Pruefung still, wenn nicht. Der Runner
+    # bringt ein eigenes shellcheck mit, ein Laptop meist keines — ohne Pin
+    # hier liefe lokal ein schwaecheres Gate als in der CI, und niemand
+    # merkte es.
+    "actionlint-py==1.7.12.25",
+    "shellcheck-py==0.11.0.1",
     # Der `mcp`-Konsolenbefehl (`mcp dev` fuer den Inspector). Er steht hier und
     # nicht in `dependencies`: ein Entwicklungswerkzeug, das der ausgelieferte
     # Server nie aufruft — siehe die Messung im Kommentar dort.
