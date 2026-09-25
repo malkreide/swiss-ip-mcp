@@ -187,7 +187,13 @@ jobs:
               // Vertrag mit swissreg.ch (IGE/IPI) festgestellt, und ein Issue, das auf so
               // einen Lauf hin zugeht, behauptet einen Vergleich, den es nicht
               // gab. Sichtbar wird es ueber den roten Job.
-              core.warning(`Live-Suite nicht ausgewertet: ${reason}. Am Issue wurde nichts geaendert.`);
+              //
+              // Den Schlusspunkt des Grundes abstreifen, bevor hier einer folgt:
+              // Der Grund «nicht gestartet» endet mit einem, eine Parser-Meldung
+              // manchmal auch, und am 25.9.2026 stand so «Geprueft wurde
+              // nichts..» im Log.
+              const satz = reason.replace(/[.\s]+$/, '');
+              core.warning(`Live-Suite nicht ausgewertet: ${satz}. Am Issue wurde nichts geaendert.`);
               return;
             }
 
