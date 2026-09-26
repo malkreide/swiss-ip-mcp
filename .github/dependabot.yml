@@ -11,9 +11,16 @@ updates:
         patterns:
           - "mcp"
           - "mcp-types"
+      python-dependencies:
+        patterns:
+          - "*"
 
   # GitHub Actions used in CI / publish workflows
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
       interval: "monthly"
+    groups:
+      github-actions:
+        patterns:
+          - "*"
