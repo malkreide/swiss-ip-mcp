@@ -73,7 +73,7 @@ dev = [
     # `dev`-Extra mit und hat keinen eigenen Pin-Schritt mehr. Beim Anheben:
     # Version aendern, `ruff format` einmal ueber die gelinteten Pfade laufen
     # lassen und das Ergebnis mit committen.
-    "ruff==0.16.7",
+    "ruff==0.16.9",
     # actionlint aus demselben Grund exakt gepinnt, und shellcheck gleich mit:
     # actionlint ruft shellcheck fuer jeden `run:`-Block auf, wenn es im PATH
     # liegt, und ueberspringt die Pruefung still, wenn nicht. Der Runner
