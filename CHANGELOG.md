@@ -5,6 +5,8 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-09-27
+
 ### Behoben
 
 - **Der Server wies sich als versionslos aus.** `MCPServer` hat fuer `version`
@@ -67,6 +69,14 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   gemessen: `mcp` haengt nicht an `fastmcp` und `fastmcp` nicht an `mcp`, und
   die Suite ist ohne sie gruen. Die Obergrenze `mcp<3` bleibt, ihre Begruendung
   ist neu geschrieben.
+- **Das `[cli]`-Extra von `mcp` aus den Laufzeitabhaengigkeiten.** Es liefert
+  einzig den `mcp`-Konsolenbefehl (`mcp dev`, `mcp install`, `mcp run`), den
+  dieser Server nie aufruft. Gemessen mit `pip install --dry-run
+  --ignore-installed`: acht Pakete weniger in jeder Produktivinstallation
+  (typer, python-dotenv, rich, pygments, markdown-it-py, mdurl, shellingham,
+  annotated-doc; zusammen rund 15 MB). Wer den Befehl bisher ueber dieses Paket
+  bezog, bekommt ihn mit `pip install "mcp[cli]"` oder im Repo ueber das
+  `dev`-Extra. Der Start per `uvx swiss-ip-mcp` ist davon nicht beruehrt.
 
 ### Hinzugefuegt
 
