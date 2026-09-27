@@ -348,6 +348,39 @@ der Teil 1 warnt.
 **`secret-scan.yml` gatet ebenfalls jeden PR** und stand in keiner Liste.
 Lokal stellt ihn keiner der Befehle oben nach.
 
+**Vor einem Release die Laufzeitabhängigkeiten der Wheels vergleichen, nicht
+die Commits.** `check_version_sync.py` hält fünf Versionsstellen gleich; ob
+eine Änderung, die Nutzer trifft, im CHANGELOG steht, prüft nichts. Bei 1.2.0
+fiel erst beim Versionssprung auf, dass `8a6e346` — `mcp[cli]` aus
+`dependencies` ins `dev`-Extra — keinen Eintrag trug, obwohl jede Installation
+damit den `mcp`-Befehl verliert.
+
+Die Commit-Liste taugt dafür nicht als Raster. Seit `v1.1.6` fassten zwölf
+Commits `src/` oder `pyproject.toml` an, zehn davon ohne CHANGELOG, und neun
+dieser zehn zu Recht (ruff-Pins, CI, Formatierung). Wer jeden
+`pyproject`-Commit verdächtigt, sucht den einen zwischen neun Fehlalarmen.
+Entscheidend ist der Abschnitt, nicht die Datei — und den zeigt das gebaute
+Paket:
+
+```bash
+pip download --no-deps "swiss-ip-mcp==<letzte Version>" -d /tmp/alt
+python -m build --wheel --outdir /tmp/neu
+for w in /tmp/alt/*.whl /tmp/neu/*.whl; do unzip -p "$w" '*/METADATA' | grep '^Requires-Dist' | grep -v 'extra ==' | sort > "$w.req"; done
+diff /tmp/alt/*.req /tmp/neu/*.req
+```
+
+Nachgemessen am 27.9.2026 mit 1.1.6 von PyPI gegen den Stand von 1.2.0: Der
+Diff zeigt genau zwei Änderungen — `fastmcp` entfernt (stand im CHANGELOG) und
+`mcp[cli]` → `mcp` (stand nicht darin). Die neun übrigen Commits erscheinen
+nicht. Ohne `grep -v 'extra =='` wären es acht Diff-Zeilen statt drei, fast
+alle aus dem `dev`-Extra; der Filter ist also das, was Nutzer- von
+Entwicklerseite trennt. Gegenprobe: dasselbe Wheel gegen sich selbst ergibt
+Exit 0.
+
+Jede Zeile, die der Diff zeigt, braucht einen CHANGELOG-Eintrag. Was er nicht
+zeigt, deckt er nicht ab: Verhaltensänderungen im Code selbst stehen nie in
+`Requires-Dist` — für die bleibt es beim Lesen von `git log -- src/`.
+
 **Live-Tests: geplanter Workflow vorhanden.** `.github/workflows/live.yml`,
 `cron: "0 3 * * 1"` plus `workflow_dispatch`. Die Live-Suite ist also nicht bloss
 per `-m "not live"` ausgeschlossen — DRIFT-005 ist hier erfüllt. `schedule`
