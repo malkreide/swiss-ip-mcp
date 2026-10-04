@@ -5,6 +5,46 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Behoben
+
+- **Jedes Suchwerkzeug lieferte immer null Treffer.** `_parse_result_page`
+  suchte Satzelemente namens `Item` und einen Zaehler `Meta/TotalCount`. Die
+  Quelle folgt WIPO ST.96 und kennt beides nicht: Ein Satz ist ein direktes
+  Kind von `Result` mit `role="item"` (bei Marken ein `Data`, bei Patenten und
+  SPC ein `DataBag`), der Zaehler heisst `Meta/TotalItemCount`. Jede Antwort
+  kam deshalb als `count: 0, total: null, match_type: "none"` samt
+  «nichts gefunden»-Hinweis an — auch die, die drei Saetze und 201798 Treffer
+  trug.
+
+  Es war keine Drift bei swissreg.ch, sondern von Anfang an falsch. Unsichtbar
+  blieb es, weil die handgeschriebenen Fixtures dieselben falschen Namen
+  nannten; 171 Unit-Tests blieben gruen. Aufgefallen ist es erst im ersten
+  Live-Lauf mit echten Zugangsdaten (4.10.2026).
+
+- **Eine abgelehnte Anfrage kam als «keine Treffer» an.** Die API antwortet auf
+  eine Anfrage, die sie nicht parsen kann, mit HTTP **200** und
+  `<Result success="false">` plus `Log`. `raise_for_status()` ist damit
+  zufrieden, und wer nur Saetze zaehlt, meldet null. Gemessen an
+  `swiss_ip_search_patent_publications`, das seit je
+  `could not parse the action PatentPublicationSearch` bekommt und als
+  «nichts gefunden» weitergab. `success="false"` fuehrt jetzt zu einem Fehler,
+  der den Log-Grund nennt.
+
+### Geaendert
+
+- **`next_page_token` ist bis auf Weiteres immer `null`.** Der Token steht im
+  Textinhalt von `Continuations/Continuation`; ihn als `<Page token="...">`
+  zurueckzugeben ist nicht der dokumentierte Weg, und gemessen am 4.10.2026
+  lieferte Seite 2 dieselben Saetze wie Seite 1. Ein Token, der die erste Seite
+  endlos wiederholt, ist schaedlicher als keiner. Die Pagination folgt separat.
+
+### Hinzugefuegt
+
+- **Aufgezeichnete Antworten** in `tests/fixtures/live/` (echte Form,
+  synthetische Textwerte, mit Aufnahmedatum in `RECORDING.md`), erzeugt von
+  `scripts/record_live_fixtures.py`, dazu `scripts/probe_response_shape.py`
+  und der Workflow `shape-probe.yml` zum Messen und Aufzeichnen von Hand.
+
 ## [1.2.0] - 2026-09-27
 
 ### Behoben

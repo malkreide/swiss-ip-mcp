@@ -242,3 +242,41 @@ class TestSynth(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestIstSynthetisch(unittest.TestCase):
+    """`ist_synthetisch` muss den ganzen Wertebereich von `_synth` abdecken.
+
+    Sonst beanstandet die Zusicherung im Repo einen Wert, den der Rekorder
+    selbst erzeugt hat — und jemand haelt eine saubere Aufzeichnung fuer ein
+    Leck. Am 4.10.2026 genau so passiert: `MUST`, ein abgeschnittenes
+    `MUSTER`, galt als Registerinhalt.
+    """
+
+    def test_deckt_alles_ab_was_synth_erzeugt(self):
+        eingaben = [
+            "812345",
+            "0",
+            "CH",
+            "de",
+            "A",
+            "2019-03-14",
+            "2026-09-30T22:00:00.000000Z",
+            "2026-09-30T22:00:00Z",
+            "MUSTERFIRMA HOLDING AG",
+            "X",
+            "XY",
+            "ab",
+            "a" * 40,
+        ]
+        for text in eingaben:
+            for n in range(1, 30):
+                wert = rlf._synth(text, n)
+                self.assertTrue(
+                    rlf.ist_synthetisch(wert),
+                    f"_synth({text!r}, {n}) = {wert!r} gilt nicht als synthetisch",
+                )
+
+    def test_echter_registerinhalt_gilt_nicht_als_synthetisch(self):
+        for text in ("MUSTERFIRMA HOLDING AG", "Bahnhofstrasse 1", "ZÜRITEST PRO", "Novartis AG"):
+            self.assertFalse(rlf.ist_synthetisch(text), repr(text))

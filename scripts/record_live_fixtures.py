@@ -137,6 +137,25 @@ def _synth_einmal(text: str, n: int) -> str:
     return (kern + "X" * len(text))[: len(text)]
 
 
+# Genau der Wertebereich, den `_synth` erzeugen kann. Die Zusicherung im Repo
+# (`TestAufzeichnungBleibtAnonym`) prueft damit, ob in `tests/fixtures/live/`
+# wirklich nur Synthetisches liegt — und fragt dafuer den Rekorder, statt das
+# Muster ein zweites Mal zu beschreiben. Zwei Beschreibungen desselben Dings
+# gehen auseinander; diese hier ist die eine.
+SYNTHETISCH = re.compile(
+    r"MUSTER\d*X*|MUSTE|MUST|MUS|MU|M"
+    r"|[ABCDEFGHJKLMNPQRSTVWXYZ]{1,3}"
+    r"|\d+"
+    r"|\d{4}-\d{2}-\d{2}(T[\d:.]+Z?)?"
+    r"|CONTINUATION-TOKEN-ANONYMISIERT[-A-Z]*"
+)
+
+
+def ist_synthetisch(text: str) -> bool:
+    """Koennte `_synth` diesen Wert erzeugt haben?"""
+    return bool(SYNTHETISCH.fullmatch(text))
+
+
 def anonymise(root: ET.Element) -> ET.Element:
     """Inhalte ersetzen, Form unberuehrt lassen. Arbeitet auf `root` selbst."""
     zaehler = 0

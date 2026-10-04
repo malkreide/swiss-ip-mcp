@@ -8,6 +8,8 @@ and are skipped automatically unless IGE_USERNAME *and* IGE_PASSWORD are set.
 from __future__ import annotations
 
 import os
+import re
+import sys
 import xml.etree.ElementTree as ET
 from collections.abc import Mapping
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -62,29 +64,66 @@ LIVE = _live_enabled()
 # Helpers
 # ---------------------------------------------------------------------------
 
+# Die Form dieser Beispiele ist der Aufzeichnung in `tests/fixtures/live/`
+# entnommen, nicht erfunden. Das ist der Unterschied, auf den es hier ankommt:
+# Die Vorgaenger-Fassung nannte die Saetze `<Item>` und den Zaehler
+# `<TotalCount>` — dieselbe Annahme, die auch der Parser machte. Beide irrten
+# gleich, 171 Tests blieben gruen, und jedes Suchwerkzeug lieferte in Wahrheit
+# null Treffer.
+#
+# `TestBeispieleStimmenMitDerAufzeichnung` haelt die beiden aneinander. Wer die
+# Beispiele hier anfasst, ohne die Aufzeichnung anzufassen, faellt dort auf.
 SAMPLE_TM_XML = """<?xml version="1.0" encoding="UTF-8"?>
 <ApiResponse xmlns="urn:ige:schema:xsd:datadeliverycore-1.0.0">
-  <Result>
-    <Meta><TotalCount>42</TotalCount></Meta>
-    <Item>
-      <ApplicationNumber>P-756001</ApplicationNumber>
-      <MarkName>ZÜRITEST</MarkName>
-      <Status>Registered</Status>
-      <HolderName>Mustermann AG</HolderName>
-    </Item>
-    <Item>
-      <ApplicationNumber>P-756002</ApplicationNumber>
-      <MarkName>ZÜRITEST PRO</MarkName>
-      <Status>Pending</Status>
-      <HolderName>Mustermann AG</HolderName>
-    </Item>
+  <Result success="true">
+    <Data role="item">
+      <Trademark>
+        <RegistrationOfficeCode>CH</RegistrationOfficeCode>
+        <ApplicationNumber><ApplicationNumberText>MUSTER1</ApplicationNumberText></ApplicationNumber>
+        <RegistrationNumber>000001</RegistrationNumber>
+        <MarkRepresentation><MarkReproduction><WordMarkSpecification>
+          <MarkSignificantVerbalElementText>MUSTER2</MarkSignificantVerbalElementText>
+        </WordMarkSpecification></MarkReproduction></MarkRepresentation>
+      </Trademark>
+    </Data>
+    <Data role="item">
+      <Trademark>
+        <RegistrationOfficeCode>CH</RegistrationOfficeCode>
+        <ApplicationNumber><ApplicationNumberText>MUSTER3</ApplicationNumberText></ApplicationNumber>
+        <RegistrationNumber>000002</RegistrationNumber>
+      </Trademark>
+    </Data>
+    <Meta>
+      <TotalItemCount>42</TotalItemCount>
+      <ItemCountOffset>0</ItemCountOffset>
+      <ItemCount>2</ItemCount>
+    </Meta>
+    <Continuations>
+      <Continuation name="NextPage">TOKEN-AUS-DEM-TEXTINHALT</Continuation>
+    </Continuations>
   </Result>
 </ApiResponse>"""
 
 SAMPLE_EMPTY_XML = """<?xml version="1.0" encoding="UTF-8"?>
 <ApiResponse xmlns="urn:ige:schema:xsd:datadeliverycore-1.0.0">
-  <Result>
-    <Meta><TotalCount>0</TotalCount></Meta>
+  <Result success="true">
+    <Meta>
+      <TotalItemCount>0</TotalItemCount>
+      <ItemCountOffset>0</ItemCountOffset>
+      <ItemCount>0</ItemCount>
+    </Meta>
+  </Result>
+</ApiResponse>"""
+
+# Eine Antwort, die die Quelle selbst als gescheitert markiert: HTTP 200,
+# `success="false"`, Grund im Log. Wortlaut aus der Aufzeichnung vom 4.10.2026.
+SAMPLE_REJECTED_XML = """<?xml version="1.0" encoding="UTF-8"?>
+<ApiResponse xmlns="urn:ige:schema:xsd:datadeliverycore-1.0.0">
+  <Result success="false">
+    <Log>
+      <LogEntry level="ERROR" code="FAIL_PARSE">action parsing failed: \
+java.lang.IllegalArgumentException: could not parse the action PatentPublicationSearch</LogEntry>
+    </Log>
   </Result>
 </ApiResponse>"""
 
@@ -1278,3 +1317,152 @@ class TestLiveApi:
         result_str = await swiss_ip_get_quota()
         result = result_str.model_dump(exclude_none=True)
         assert "error" not in result
+
+
+# ---------------------------------------------------------------------------
+# Aufgezeichnete Antworten (DRIFT-006)
+# ---------------------------------------------------------------------------
+
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1] / "scripts"))
+import record_live_fixtures as _rlf  # noqa: E402
+
+_LIVE_FIXTURES = pathlib.Path(__file__).parent / "fixtures" / "live"
+
+
+def _fixture(name: str) -> ET.Element:
+    return ET.parse(_LIVE_FIXTURES / name).getroot()
+
+
+class TestParserGegenAufzeichnung:
+    """Der Parser gegen echte Antworten, nicht gegen eigene Annahmen.
+
+    Jede Zahl hier ist am 4.10.2026 gemessen (Laeufe 37198882345, 37201829767)
+    und steht so in `tests/fixtures/live/`. Die Vorgaenger-Fassung des Parsers
+    kam bei allen vier auf `count=0, total=None`.
+    """
+
+    def test_marken_seite_traegt_drei_saetze(self):
+        env = _parse_result_page(_fixture("trademark-search.xml"))
+        assert env.count == 3
+        assert env.total == "201798"
+        assert env.match_type == "exact"
+
+    def test_patente_seite_traegt_drei_saetze(self):
+        # Der Fall, der das Zaehlen der Payloads widerlegt: `BibliographicData`
+        # kommt hier 4× vor, bei 3 Saetzen — eines steckt in `PatentPublication`.
+        root = _fixture("patent-search.xml")
+        assert sum(1 for el in root.iter() if _local(el.tag) == "BibliographicData") == 4
+        env = _parse_result_page(root)
+        assert env.count == 3
+        assert env.total == "18941"
+
+    def test_spc_seite_traegt_drei_saetze(self):
+        env = _parse_result_page(_fixture("spc-search.xml"))
+        assert env.count == 3
+        assert env.total == "115"
+
+    def test_nummernsuche_ist_leer_und_sagt_es(self):
+        # Diese Antwort ist echt leer — `TotalItemCount` 0. Kein Fehler, ein
+        # Nullbefund, und der gehoert als solcher gemeldet.
+        env = _parse_result_page(_fixture("trademark-by-number.xml"))
+        assert env.count == 0
+        assert env.total == "0"
+        assert env.match_type == "none"
+        assert env.suggestion
+
+    def test_saetze_tragen_ihre_schema_namen(self):
+        env = _parse_result_page(_fixture("patent-search.xml"))
+        assert set(env.results[0]) >= {"BibliographicData", "PatentLegalStatusData"}
+
+    def test_marken_satz_traegt_den_markennamen(self):
+        env = _parse_result_page(_fixture("trademark-search.xml"))
+        satz = env.results[0]["Trademark"]
+        assert "MarkRepresentation" in satz
+
+    def test_abgelehnte_antwort_wird_nicht_als_leer_gemeldet(self):
+        # Der eigentliche Befund: HTTP 200, `success="false"`, und bisher kam
+        # das beim Nutzer als «nichts gefunden» an.
+        with pytest.raises(ValueError) as ei:
+            _parse_result_page(_fixture("patent-publication-search.xml"))
+        assert "success=false" in str(ei.value)
+        assert "FAIL_PARSE" in str(ei.value)
+        assert "PatentPublicationSearch" in str(ei.value)
+
+    def test_kein_seitentoken_bevor_die_mechanik_stimmt(self):
+        # Seite 2 trug am 4.10.2026 dieselben Saetze wie Seite 1: Der Token aus
+        # `Continuations/Continuation` wirkt als `<Page token=...>` nicht. Bis
+        # das behoben ist, ist ein zurueckgehaltener Token besser als eine
+        # Einladung zur Endlosschleife.
+        root = _fixture("trademark-search.xml")
+        assert any(_local(el.tag) == "Continuation" for el in root.iter())
+        assert _parse_result_page(root).next_page_token is None
+
+
+class TestBeispieleStimmenMitDerAufzeichnung:
+    """Die handgeschriebenen Beispiele und die Aufzeichnung dieselbe Form.
+
+    Diese Klasse ist die Lehre aus dem 4.10.2026: Beispiele, die aus demselben
+    Kopf stammen wie der Parser, koennen dessen Irrtum nicht widerlegen. Wer
+    `SAMPLE_TM_XML` anfasst, ohne die Aufzeichnung anzufassen, faellt hier auf.
+    """
+
+    def test_satzgrenze_ist_dieselbe(self):
+        beispiel = _parse_result_page(_make_root(SAMPLE_TM_XML))
+        assert beispiel.count == 2  # das Beispiel traegt zwei
+        echt = _parse_result_page(_fixture("trademark-search.xml"))
+        assert echt.count == 3  # die Aufzeichnung drei
+        # Beide über denselben Weg gezaehlt: `role="item"` am Kind von Result.
+        for root in (_make_root(SAMPLE_TM_XML), _fixture("trademark-search.xml")):
+            result = [el for el in root.iter() if _local(el.tag) == "Result"][0]
+            assert [k.get("role") for k in result if k.get("role")] == ["item"] * len(
+                [k for k in result if k.get("role") == "item"]
+            )
+
+    def test_meta_feld_heisst_in_beiden_gleich(self):
+        for root in (_make_root(SAMPLE_TM_XML), _fixture("trademark-search.xml")):
+            namen = {_local(el.tag) for el in root.iter()}
+            assert "TotalItemCount" in namen
+            assert "TotalCount" not in namen, "der alte, falsche Name ist zurueck"
+
+    def test_beispiel_nennt_success_wie_die_quelle(self):
+        for root in (_make_root(SAMPLE_TM_XML), _fixture("trademark-search.xml")):
+            result = [el for el in root.iter() if _local(el.tag) == "Result"][0]
+            assert result.get("success") == "true"
+
+
+class TestAufzeichnungBleibtAnonym:
+    """Die Fixtures im Repo tragen keine Registerinhalte.
+
+    Der Rekorder prueft das beim Schreiben; diese Zusicherung prueft, was
+    tatsaechlich im Repo liegt. Wer eine unbearbeitete Antwort hier ablegt,
+    faellt auf — unabhaengig davon, mit welchem Werkzeug er sie geholt hat.
+    """
+
+    # Was synthetisch aussieht, definiert der Rekorder — nicht dieser Test.
+    # Zwei Beschreibungen desselben Musters gehen mit der Zeit auseinander, und
+    # dann prueft der Test etwas anderes als der Rekorder erzeugt.
+    # Zaehler und Fehlermeldungen der Quelle bleiben absichtlich echt.
+    ECHT_ERLAUBT = {"TotalItemCount", "ItemCount", "ItemCountOffset", "LogEntry"}
+
+    def test_jeder_textwert_ist_synthetisch(self):
+        dateien = sorted(_LIVE_FIXTURES.glob("*.xml"))
+        assert dateien, "keine Aufzeichnung gefunden"
+        for datei in dateien:
+            for el in ET.parse(datei).getroot().iter():
+                text = (el.text or "").strip()
+                if not text or _local(el.tag) in self.ECHT_ERLAUBT:
+                    continue
+                assert _rlf.ist_synthetisch(text), f"{datei.name} {_local(el.tag)}: {text!r}"
+
+    def test_laufkennungen_sind_ersetzt(self):
+        for datei in sorted(_LIVE_FIXTURES.glob("*.xml")):
+            root = ET.parse(datei).getroot()
+            for name in ("uuid", "timestamp", "requestUuid"):
+                wert = root.get(name)
+                if wert is not None:
+                    assert wert.startswith("anonymisiert-"), f"{datei.name} {name}={wert!r}"
+
+    def test_aufzeichnung_ist_datiert(self):
+        text = (_LIVE_FIXTURES / "RECORDING.md").read_text(encoding="utf-8")
+        assert re.search(r"\d{4}-\d{2}-\d{2}", text), "ohne Datum ist «gemessen» von «angenommen» nicht zu trennen"
+        assert "nicht ihren Inhalt" in text
