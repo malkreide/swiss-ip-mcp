@@ -254,6 +254,48 @@ Die Kosten der Ableitung sind gemessen: ein Arbeitstag, an dem der PR-Text den
 falschen Namen trug und in den Einstellungen nach einer Zeichenfolge gesucht
 wurde, die dort nicht steht.
 
+**Ein Review, der nicht eingetragen ist, hält nichts auf — auch wenn er
+läuft.** Codex startet unter anderem beim Auslöser «Draft marked ready». Am
+4.10.2026 über die vier PRs jenes Tages in `swiss-ip-mcp` gemessen:
+
+| PR | Review angekündigt | «Completed» | gemergt | Verdikt nach dem Merge |
+|---|---|---|---|---|
+| #94 | 11:28:47 | 11:29:44 | 11:28:49 | +55 s |
+| #95 | 13:00:37 | 13:01:27 | 13:00:34 | +53 s |
+| #96 | 14:31:02 | 14:32:08 | 14:30:57 | +71 s |
+| #97 | 16:14:19 | 16:15:14 | 16:14:32 | +42 s |
+
+Der Review braucht 50 bis 71 Sekunden, und das Draft-Flag fiel jedes Mal in
+derselben Minute wie der Merge. Viermal von vier kam das Verdikt also
+hinterher; bei #95 und #96 war der PR schon zu, bevor der Bot sich überhaupt
+gemeldet hatte.
+
+Dass er nichts aufhält, ist gemessen und nicht geschlossen: Um 16:14, während
+der Review lief und nichts berichtet hatte, stand #97 auf
+`mergeable_state: clean`. Ein fehlender required Kontext hätte `blocked`
+ergeben — genau die Unterscheidung aus dem Absatz darüber. Der Merge selbst
+taugt als Beleg nicht: Ihn führte ein Mensch aus, der eine Branch Protection
+überstimmen kann.
+
+**Was die Messung nicht hergibt, ist der Preis.** Alle vier Reviews endeten
+ohne Fund (👍 statt Kommentar), verloren ist also nichts. Der Fall mit dem Fund
+steht weiter oben und war Glück: Auf `swiss-environment-mcp` PR #113 kam der
+Befund vierzehn Sekunden vor dem Merge an — dieselbe Minute, andere Seite der
+Ziellinie.
+
+Daraus folgt nicht «langsamer mergen», sondern eine Unterscheidung: Ein Bot,
+der nach dem Merge urteilt, ist Dokumentation und kein Gate. Wer ihn als Gate
+will, trägt ihn als required Kontext ein; wer ihn als Dokumentation behält,
+darf seinen grünen Haken nicht als «geprüft» lesen.
+
+**Und die erste Fassung dieser Beobachtung war selbst ein Fehlschluss.** Sie
+stand auf dem Kommentartext, der im Ereignis mitkam («Running since
+16:14:16»), und schloss daraus, der Review sei nie zu einem Befund gekommen.
+Der Bot schreibt aber denselben Kommentar fort: Objekt `5981975465` trug 42
+Sekunden später «Completed». Ein Ereignis ist eine Momentaufnahme, keine
+Auskunft über den Stand — wer es liest statt die Quelle, liest den Stand von
+damals.
+
 ### Wenn zwei Agenten dasselbe tun
 
 Vor dem Anlegen eines Branches mit vorgegebenem Namen prüfen, ob es ihn schon
