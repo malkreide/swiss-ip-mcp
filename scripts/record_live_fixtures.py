@@ -82,7 +82,21 @@ def _synth(text: str, n: int) -> str:
     `n` macht es deterministisch und ueber die Datei hinweg verschieden, damit
     ein Test nicht versehentlich zwei Felder fuer gleich haelt, die es in der
     Antwort nicht sind.
+
+    Nie gleich der Eingabe: Bei kurzen Werten — ein einstelliger Statuscode,
+    ein Zweibuchstaben-Land — trifft der synthetische Wert den echten sonst
+    irgendwann, und dann steht der Originalinhalt im Fixture. Gemessen am
+    4.10.2026 an einem Lauf mit fuenfzehn einstelligen Codes: einmal.
     """
+    for versuch in range(16):
+        wert = _synth_einmal(text, n + versuch * 7919)
+        if wert != text:
+            return wert
+    # Praktisch unerreichbar; lieber sichtbar scheitern als still durchlassen.
+    raise ValueError(f"kein synthetischer Wert fuer {len(text)} Zeichen gefunden")
+
+
+def _synth_einmal(text: str, n: int) -> str:
     if ISO_DATETIME.match(text):
         tag = (BASIS + timedelta(days=n % 3650)).isoformat()
         return f"{tag}T00:00:00.000000Z"[: len(text)].ljust(len(text), "0")
@@ -92,8 +106,11 @@ def _synth(text: str, n: int) -> str:
         # Gleiche Laenge, keine fuehrende Null verlieren.
         return str(n % (10 ** len(text))).zfill(len(text))
     if re.fullmatch(r"[A-Za-z]{1,3}", text):
-        # Codes wie `CH`, `de`, `A1` bleiben Codes derselben Laenge.
-        return ("X" * len(text))[: len(text)]
+        # Codes wie `CH`, `de` bleiben Codes derselben Laenge. Nicht konstant
+        # «X»: Bei einem einbuchstabigen Code gaebe es dann genau einen
+        # moeglichen Wert, und fuer die Eingabe «X» keinen abweichenden.
+        alphabet = "ABCDEFGHJKLMNPQRSTVWXYZ"
+        return "".join(alphabet[(n + i) % len(alphabet)] for i in range(len(text)))
     # Alles uebrige: Buchstaben derselben Laenge, damit Laengen vergleichbar
     # bleiben — die stehen ohnehin schon im Strukturbericht der Sonde.
     kern = f"MUSTER{n}"
@@ -123,17 +140,61 @@ def anonymise(root: ET.Element) -> ET.Element:
     return root
 
 
-def restliche_klartexte(root: ET.Element, original: ET.Element) -> list[str]:
-    """Welche Texte aus `original` stehen noch in `root`? Fuer die Gegenprobe."""
-    verbleibend = []
-    neu = {(el.text or "").strip() for el in root.iter()}
+def _hohe_entropie(text: str) -> bool:
+    """Ist `text` ein Freitextwert, der nirgends auftauchen darf?
+
+    Ziffernfolgen, kurze Codes und Datumsangaben sind es nicht: Der
+    Synthetisierer erzeugt Werte derselben Klasse, und die treffen irgendwo im
+    Dokument zwangslaeufig einen echten Wert eines ANDEREN Feldes. Das ist kein
+    Leck, sondern eine Kollision. Namen, Adressen, Markentexte und Tokens
+    dagegen sind lang und unregelmaessig genug, dass eine Kollision
+    ausgeschlossen ist — bei ihnen heisst ein Treffer: durchgerutscht.
+    """
+    if len(text) < 8:
+        return False
+    if text.isdigit():
+        return False
+    return not (ISO_DATE.match(text) or ISO_DATETIME.match(text))
+
+
+def anonymisierung_pruefen(root: ET.Element, original: ET.Element) -> list[str]:
+    """Was an der Anonymisierung nicht stimmt — leere Liste heisst: in Ordnung.
+
+    Zwei Regeln, und die erste ist die eigentliche:
+
+    1. **Kein Element behaelt seinen eigenen Text.** Das ist Anonymisierung,
+       Element fuer Element geprueft.
+    2. **Kein Freitextwert steht irgendwo im Ergebnis.** Fuer Namen, Adressen
+       und Tokens, auch an anderer Stelle als im Original.
+
+    Die erste Fassung dieser Pruefung kannte nur eine globale Variante von
+    Regel 2 und wandte sie auf JEDEN Wert an. Am 4.10.2026 meldete sie deshalb
+    14 «Ueberlebende», von denen 13 Kollisionen zwischen einem synthetischen
+    Datum und dem echten Datum eines anderen Feldes waren — und der Rekorder
+    liess drei von vier Aufzeichnungen weg (Lauf 37201418733). Eine Bremse, die
+    bei jeder Fahrt greift, ist keine Bremse.
+    """
+    probleme = []
+
+    # Regel 1: paarweise durch beide Baeume. Sie sind strukturgleich, weil
+    # `anonymise` nur Texte und Attributwerte anfasst.
+    for alt, neu in zip(original.iter(), root.iter(), strict=True):
+        text = (alt.text or "").strip()
+        if not text or _local(alt.tag) in KEEP_TEXT_TAGS:
+            continue
+        if (neu.text or "").strip() == text:
+            probleme.append(f"{_local(alt.tag)}: Text unveraendert")
+
+    # Regel 2: Freitext darf nirgends mehr auftauchen.
+    vorhanden = {(el.text or "").strip() for el in root.iter()}
+    vorhanden |= {wert for el in root.iter() for wert in el.attrib.values()}
     for el in original.iter():
         text = (el.text or "").strip()
         if not text or _local(el.tag) in KEEP_TEXT_TAGS:
             continue
-        if text in neu:
-            verbleibend.append(text)
-    return verbleibend
+        if _hohe_entropie(text) and text in vorhanden:
+            probleme.append(f"{_local(el.tag)}: Freitext steht noch im Ergebnis")
+    return probleme
 
 
 async def _record(out: Path) -> int:
@@ -168,7 +229,7 @@ async def _record(out: Path) -> int:
             continue
         original = ET.fromstring(ET.tostring(root, encoding="unicode"))
         anonymise(root)
-        rest = restliche_klartexte(root, original)
+        rest = anonymisierung_pruefen(root, original)
         if rest:
             # Nicht schreiben, was nicht anonym ist. Lieber kein Fixture als
             # eines, das Registerinhalte traegt.

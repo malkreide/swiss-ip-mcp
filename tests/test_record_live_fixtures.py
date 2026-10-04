@@ -135,23 +135,73 @@ class TestAnonymise(unittest.TestCase):
 
 
 class TestSelbstkontrolle(unittest.TestCase):
-    """`restliche_klartexte` ist die Bremse des Rekorders — sie muss greifen."""
+    """`anonymisierung_pruefen` ist die Bremse des Rekorders.
+
+    Sie muss bei einem echten Durchrutscher greifen und bei einer Kollision
+    schweigen. Die erste Fassung tat das Gegenteil: Sie pruefte global und
+    meldete jeden synthetischen Wert, der dem echten Wert eines anderen Feldes
+    glich — am 4.10.2026 blieben deshalb drei von vier Aufzeichnungen aus.
+    """
 
     def test_meldet_nichts_bei_sauberer_anonymisierung(self):
         original = ET.fromstring(ANTWORT)
         anonym = rlf.anonymise(ET.fromstring(ANTWORT))
-        self.assertEqual(rlf.restliche_klartexte(anonym, original), [])
+        self.assertEqual(rlf.anonymisierung_pruefen(anonym, original), [])
 
-    def test_meldet_ueberlebenden_text(self):
+    def test_meldet_unveraenderten_text(self):
         # Gegenprobe: ein Baum, der gar nicht anonymisiert wurde.
         original = ET.fromstring(ANTWORT)
-        rest = rlf.restliche_klartexte(ET.fromstring(ANTWORT), original)
-        self.assertIn("ZUERITEST PRO", rest)
+        probleme = rlf.anonymisierung_pruefen(ET.fromstring(ANTWORT), original)
+        self.assertTrue(any("MarkSignificantVerbalElementText" in p for p in probleme))
         # Die Meta-Zaehler duerfen nicht als Fund gelten, sie bleiben absichtlich.
-        self.assertNotIn("123456", rest)
+        self.assertFalse(any("TotalItemCount" in p for p in probleme), probleme)
+
+    def test_meldet_unveraenderten_kurzwert(self):
+        # Nur Regel 1 kann das finden: Ein einstelliger Code, der sein eigenes
+        # Feld nicht verlassen hat. Regel 2 schweigt hier absichtlich, weil
+        # «7» keine Entropie traegt — ohne Regel 1 bliebe der Originalwert
+        # unbemerkt im Fixture stehen.
+        original = ET.fromstring("<R><C>7</C><Name>MUSTERFIRMA HOLDING AG</Name></R>")
+        anonym = ET.fromstring("<R><C>7</C><Name>ersetzt</Name></R>")
+        probleme = rlf.anonymisierung_pruefen(anonym, original)
+        self.assertEqual(probleme, ["C: Text unveraendert"])
+
+    def test_schweigt_bei_kollision_zwischen_feldern(self):
+        # Genau der Fall, der die Aufzeichnung blockierte: Das synthetische
+        # Datum des einen Feldes trifft das echte Datum eines anderen. Kein
+        # Leck — der Wert stammt nicht aus dem Feld, in dem er nun steht.
+        xml = "<R>" + "".join(f"<D>2020-01-{i:02d}</D><C>{i % 10}</C>" for i in range(1, 16)) + "</R>"
+        original = ET.fromstring(xml)
+        anonym = rlf.anonymise(ET.fromstring(xml))
+        self.assertEqual(rlf.anonymisierung_pruefen(anonym, original), [])
+
+    def test_meldet_freitext_an_anderer_stelle(self):
+        # Umgekehrt: Ein Name, der irgendwo im Ergebnis auftaucht, ist ein Leck,
+        # auch wenn er das Feld gewechselt hat. Dafuer ist Regel 2 da.
+        xml = "<R><A>MUSTERFIRMA HOLDING AG</A><B>kurz</B></R>"
+        original = ET.fromstring(xml)
+        anonym = ET.fromstring("<R><A>ersetzt</A><B>MUSTERFIRMA HOLDING AG</B></R>")
+        probleme = rlf.anonymisierung_pruefen(anonym, original)
+        self.assertTrue(any("Freitext" in p for p in probleme), probleme)
+
+
+class TestHoheEntropie(unittest.TestCase):
+    def test_kurzes_und_regelmaessiges_ist_keine_entropie(self):
+        for text in ("3", "CH", "de", "812345", "2019-03-14", "2026-09-30T22:00:00.000000Z"):
+            self.assertFalse(rlf._hohe_entropie(text), repr(text))
+
+    def test_freitext_ist_entropie(self):
+        for text in ("MUSTERFIRMA HOLDING AG", "Bahnhofstrasse 1, 8001", "OPAKER-TOKEN-1234"):
+            self.assertTrue(rlf._hohe_entropie(text), repr(text))
 
 
 class TestSynth(unittest.TestCase):
+    def test_nie_gleich_der_eingabe(self):
+        # Sonst stehen kurze Originalwerte im Fixture.
+        for text in ("0", "3", "CH", "X", "XX", "MUSTER1"):
+            for n in range(1, 40):
+                self.assertNotEqual(rlf._synth(text, n), text, f"{text!r} bei n={n}")
+
     def test_laenge_bleibt(self):
         for text in ("812345", "CH", "ZUERITEST PRO", "2019-03-14", "x" * 70):
             self.assertEqual(len(rlf._synth(text, 7)), len(text), repr(text))
