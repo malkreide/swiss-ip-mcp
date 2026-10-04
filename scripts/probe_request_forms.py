@@ -146,6 +146,50 @@ async def _messen(was: str) -> int:
                 print(f"  {beschreibung:48} ({len(wert)} Zeichen)  {befund(root)}")
                 gemessen += 1
 
+    if was in ("alle", "id"):
+        print("\n=== Nummernsuche, Runde 2: andere Query-Elemente ===")
+        print("`Id` findet nichts; die Doku sagt, konkrete Requests koennen")
+        print("`AbstractDefinedFieldsQuery` erweitern, nennt die Felder aber nicht.\n")
+        erste = await _call_api(_build_trademark_search("<Any>Zürich*</Any>", 3))
+        result = next(el for el in erste.iter() if _local(el.tag) == "Result")
+        saetze = [kind for kind in result if (kind.get("role") or "") == "item"]
+        if saetze:
+
+            def feld(name: str) -> str:
+                return next(
+                    (
+                        (el.text or "").strip()
+                        for el in saetze[0].iter()
+                        if _local(el.tag) == name and (el.text or "").strip()
+                    ),
+                    "",
+                )
+
+            anmelde, register = feld("ApplicationNumberText"), feld("RegistrationNumber")
+            formen = []
+            if anmelde:
+                formen += [
+                    ("Any mit ApplicationNumberText", f"<Any>{_esc(anmelde)}</Any>"),
+                    ("ApplicationNumber-Element", f"<ApplicationNumber>{_esc(anmelde)}</ApplicationNumber>"),
+                    (
+                        "ApplicationNumberText-Element",
+                        f"<ApplicationNumberText>{_esc(anmelde)}</ApplicationNumberText>",
+                    ),
+                ]
+            if register:
+                formen += [
+                    ("Any mit RegistrationNumber", f"<Any>{_esc(register)}</Any>"),
+                    ("RegistrationNumber-Element", f"<RegistrationNumber>{_esc(register)}</RegistrationNumber>"),
+                ]
+            for beschreibung, query in formen:
+                try:
+                    root = await _call_api(_build_trademark_search(query, 3))
+                except Exception as exc:
+                    print(f"  {beschreibung:38} FEHLER {type(exc).__name__}: {exc}")
+                    continue
+                print(f"  {beschreibung:38} {befund(root)}")
+                gemessen += 1
+
     if was in ("alle", "pagination"):
         print("\n=== Pagination: Continuation als Action in der Folgeanfrage ===")
         erste = await _call_api(_build_trademark_search("<Any>Zürich*</Any>", 3))
@@ -197,6 +241,42 @@ async def _messen(was: str) -> int:
                 gemessen += 1
 
     if was in ("alle", "publikation"):
+        print("\n=== Publikationssuche, Runde 2: der Rumpf ===")
+        print("Die Fehlermeldungen unterscheiden sich: unbekannte Namen geben")
+        print("«unsupported action type», `PatentPublicationSearch` dagegen")
+        print("«could not parse the action». Der Name stimmt also, der Rumpf nicht.\n")
+        NS_PUB = "urn:ige:schema:xsd:datadeliverypatentpublication-1.0.0"
+        rumpfe = [
+            ("pat: (heute)", f'<pat:PatentPublicationSearchRequest xmlns="{NS_COMMON}">', "pat:"),
+            ("ohne Praefix, common", f'<PatentPublicationSearchRequest xmlns="{NS_COMMON}">', ""),
+            (
+                "eigener Publikations-Namespace",
+                f'<pub:PatentPublicationSearchRequest xmlns="{NS_COMMON}">',
+                "pub:",
+                NS_PUB,
+            ),
+        ]
+        for beschreibung, oeffnen, praefix in rumpfe:
+            xml = (
+                '<?xml version="1.0" encoding="UTF-8"?>\n'
+                f'<ApiRequest xmlns="{NS_CORE}" xmlns:pat="{NS_PAT}" xmlns:pub="{NS_PUB}">\n'
+                '  <Action type="PatentPublicationSearch">\n'
+                f"    {oeffnen}\n"
+                '      <Representation details="Maximal"/>\n'
+                '      <Page size="3"/>\n'
+                "      <Query><Any>Roche*</Any></Query>\n"
+                f"    </{praefix}PatentPublicationSearchRequest>\n"
+                "  </Action>\n"
+                "</ApiRequest>"
+            )
+            try:
+                root = await _call_api(xml)
+            except Exception as exc:
+                print(f"  {beschreibung:34} FEHLER {type(exc).__name__}: {exc}")
+                continue
+            print(f"  {beschreibung:34} {befund(root)}")
+            gemessen += 1
+
         print("\n=== Publikationssuche: welcher Action-Typ wird geparst? ===")
         for action in PUBLIKATION_ACTIONS:
             xml = (
