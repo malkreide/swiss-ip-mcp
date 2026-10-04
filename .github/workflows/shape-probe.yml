@@ -1,0 +1,80 @@
+# Einmalige Messung der Antwortform von swissreg.ch (IGE/IPI).
+#
+# Kein `schedule`: Das hier ist kein Waechter, sondern ein Messgeraet. Es wird
+# von Hand angeworfen, wenn eine Frage offen ist, die nur die Quelle selbst
+# beantworten kann — etwa die vom 4.10.2026: Warum findet
+# `_parse_result_page` null Items, obwohl die Abfrage eine Antwort bekommt?
+#
+# Die Sonde berichtet Struktur, nicht Inhalt: Pfade, Attributnamen,
+# Textlaengen, und als einzigen Klartextwert `TotalCount`. Welche Marken im
+# Register stehen, gehoert nicht in ein Workflow-Log; welche Felder die Antwort
+# traegt, schon. Die Zusicherung dazu haengt an
+# `tests/test_probe_response_shape.py` und nicht am Wohlverhalten des Aufrufers.
+
+name: Antwortform messen
+
+on:
+  workflow_dispatch:
+    inputs:
+      only:
+        description: "Welche Abfrage messen"
+        required: false
+        default: alle
+        type: choice
+        options:
+          - alle
+          - trademark
+          - patent
+          - spc
+          - quota
+
+permissions:
+  contents: read
+
+concurrency:
+  group: shape-probe
+  cancel-in-progress: false
+
+jobs:
+  probe:
+    name: Antwortform von swissreg.ch (IGE/IPI)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install -e ".[dev]"
+
+      # Kein `continue-on-error`: Kam keine einzige Antwort, hat niemand etwas
+      # gemessen, und ein gruener Haken darauf waere derselbe Fehler wie der
+      # uebersprungene Testlauf, vor dem `classify_live_run.py` warnt. Die
+      # Sonde endet dann selbst mit 1.
+      - name: Sonde
+        env:
+          IGE_USERNAME: ${{ secrets.IGE_USERNAME }}
+          IGE_PASSWORD: ${{ secrets.IGE_PASSWORD }}
+          ONLY: ${{ inputs.only }}
+        run: |
+          args=()
+          if [ -n "$ONLY" ] && [ "$ONLY" != "alle" ]; then
+            args+=(--only "$ONLY")
+          fi
+          # In die Zusammenfassung UND ins Log: Die Zusammenfassung liest sich
+          # besser, das Log bleibt die Quelle, wenn sie abgeschnitten wird.
+          {
+            echo '## Antwortform von swissreg.ch'
+            echo
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          python scripts/probe_response_shape.py "${args[@]}" 2>&1 \
+            | tee -a "$GITHUB_STEP_SUMMARY"
+          status=${PIPESTATUS[0]}
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          exit "$status"
