@@ -1,0 +1,4 @@
+<?xml version='1.0' encoding='utf-8'?>
+<ns0:ApiResponse xmlns:ns0="urn:ige:schema:xsd:datadeliverycore-1.0.0" xmlns:ns2="urn:ige:schema:xsd:datadeliverycommon-1.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="urn:ige:schema:xsd:datadeliverycore-1.0.0 urn:publicid:-:IGE:XSD+DATADELIVERYCORE+1.0.0:EN" uuid="anonymisiert-uuid" timestamp="anonymisiert-timestamp" requestUuid="anonymisiert-requestUuid">
+<ns0:Result success="true"><ns0:Meta xsi:schemaLocation="urn:ige:schema:xsd:datadeliverycommon-1.0.0 urn:publicid:-:IGE:XSD+DATADELIVERYCOMMON+1.0.0:EN"><ns2:TotalItemCount>0</ns2:TotalItemCount><ns2:ItemCountOffset>0</ns2:ItemCountOffset><ns2:ItemCount>0</ns2:ItemCount></ns0:Meta></ns0:Result>
+</ns0:ApiResponse>

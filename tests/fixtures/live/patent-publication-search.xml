@@ -1,0 +1,6 @@
+<?xml version='1.0' encoding='utf-8'?>
+<ns0:ApiResponse xmlns:ns0="urn:ige:schema:xsd:datadeliverycore-1.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="urn:ige:schema:xsd:datadeliverycore-1.0.0 urn:publicid:-:IGE:XSD+DATADELIVERYCORE+1.0.0:EN" uuid="anonymisiert-uuid" timestamp="anonymisiert-timestamp" requestUuid="anonymisiert-requestUuid">
+<ns0:Result success="false"><ns0:Log>
+<ns0:LogEntry level="ERROR" timestamp="2026-10-04T12:25:23.879181830Z" code="FAIL_PARSE">action parsing failed: java.lang.IllegalArgumentException: could not parse the action PatentPublicationSearch</ns0:LogEntry>
+</ns0:Log></ns0:Result>
+</ns0:ApiResponse>

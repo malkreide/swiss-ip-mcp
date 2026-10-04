@@ -223,6 +223,22 @@ class TestSynth(unittest.TestCase):
 
         datetime.date.fromisoformat(rlf._synth("2019-03-14", 11))
 
+    def test_zeitstempel_bleibt_gueltig(self):
+        # Der Synthetisierer schnitt zuerst ab und fuellte mit Nullen auf; das
+        # ergab `2020-03-09T00:00:00.000000Z00`, einen Wert, den die Quelle so
+        # nie schickt. In einer Aufzeichnung ist das eine falsche Aussage
+        # ueber die Quelle.
+        import datetime
+
+        for text in (
+            "2026-09-30T22:00:00.000000Z",
+            "2026-09-30T22:00:00Z",
+            "2026-09-30T22:00:00.123Z",
+        ):
+            wert = rlf._synth(text, 5)
+            self.assertEqual(len(wert), len(text), repr(text))
+            datetime.datetime.fromisoformat(wert.replace("Z", "+00:00"))
+
 
 if __name__ == "__main__":
     unittest.main()

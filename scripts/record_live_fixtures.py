@@ -103,8 +103,21 @@ def _synth(text: str, n: int) -> str:
 
 def _synth_einmal(text: str, n: int) -> str:
     if ISO_DATETIME.match(text):
+        # Gleiche Laenge UND gueltig. Abschneiden-und-mit-Nullen-auffuellen
+        # ergab `2020-03-09T00:00:00.000000Z00` — ein Wert, den die Quelle so
+        # nie schickt, und ein Leser der Aufzeichnung haette ihn ihr
+        # zugeschrieben. Die Laenge wird deshalb ueber die Bruchstellen
+        # geregelt, nicht ueber Fuellzeichen am Ende.
         tag = (BASIS + timedelta(days=n % 3650)).isoformat()
-        return f"{tag}T00:00:00.000000Z"[: len(text)].ljust(len(text), "0")
+        endet_auf_z = text.endswith("Z")
+        rest = len(text) - 19 - (1 if endet_auf_z else 0)  # 19 = YYYY-MM-DDTHH:MM:SS
+        bruch = ""
+        if rest >= 2:  # Punkt plus mindestens eine Stelle
+            bruch = "." + "0" * (rest - 1)
+        wert = f"{tag}T00:00:00{bruch}" + ("Z" if endet_auf_z else "")
+        # Laengen, die sich so nicht treffen lassen (etwa ein Offset
+        # `+02:00`), bleiben lieber kuerzer als ungueltig.
+        return wert
     if ISO_DATE.match(text):
         return (BASIS + timedelta(days=n % 3650)).isoformat()
     if text.isdigit():
