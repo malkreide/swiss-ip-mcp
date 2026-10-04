@@ -7,6 +7,38 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Behoben
 
+- **Die Pagination wiederholte endlos die erste Seite.** Der
+  Fortsetzungs-Token steht im Textinhalt von `Continuations/Continuation`, und
+  dieser Server gab ihn als `<Page token="...">` zurueck. Die Quelle ignoriert
+  das: Gemessen am 4.10.2026 trug Seite 2 dieselben Saetze wie Seite 1, und
+  `ItemCountOffset` blieb 0. `Continuation` gehoert zur
+  `AbstractAction`-Gruppe und wird als ganzes Element an die Stelle der
+  `Action` in die naechste `ApiRequest` kopiert; so gefahren traegt Seite 2
+  andere Saetze. Das `token`-Attribut ist aus allen Buildern entfernt — es tat
+  nichts und sah aus, als taete es etwas.
+
+- **Die Nummernsuche fand nie etwas.** `swiss_ip_get_trademark` und
+  `swiss_ip_get_patent` fragten `<Id>` ab; mit jeder Nummernform aus einem
+  echten Satz antwortete die Quelle `success=true` und `TotalItemCount 0`.
+  `Id` ist nicht das Feld fuer Registerdaten. Das Nummernfeld heisst
+  `ApplicationNumber` und liegt im **Register-Namespace** — die Quelle nannte
+  es selbst (`Maybe misspelled? - {...datadeliverytrademark-1.0.0}
+  ApplicationNumber`). So gefahren liefert jedes der drei Register genau einen
+  Satz.
+
+  **Achtung, geaenderter Vertrag:** Abfragbar ist die **Anmeldenummer**.
+  `RegistrationNumber` existiert in keinem Namespace als Abfragefeld; eine
+  Marke laesst sich nicht über ihre Registernummer nachschlagen. Die
+  Werkzeugbeschreibung sagt das jetzt, statt eine Registernummer anzubieten,
+  die nie funktioniert hat.
+
+- **Die Publikationssuche war seit je unbenutzbar.**
+  `swiss_ip_search_patent_publications` baute ihr Request-Element im
+  Patent-Namespace; die Quelle antwortet darauf mit HTTP 200 und
+  `could not parse the action PatentPublicationSearch`. Das Schema hat einen
+  eigenen Namespace (`datadeliverypatentpublication-1.0.0`); damit
+  `success=true` und 39578 Treffer fuer `Roche*`.
+
 - **Jedes Suchwerkzeug lieferte immer null Treffer.** `_parse_result_page`
   suchte Satzelemente namens `Item` und einen Zaehler `Meta/TotalCount`. Die
   Quelle folgt WIPO ST.96 und kennt beides nicht: Ein Satz ist ein direktes

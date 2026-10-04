@@ -426,6 +426,43 @@ in die naechste `ApiRequest` kopiert. Bis das umgebaut ist, gibt der Server
 `next_page_token: null` — ein Token, der die erste Seite endlos wiederholt, ist
 schaedlicher als keiner.
 
+**Die Fehlermeldung der Quelle ist eine Auskunft, nicht nur eine Absage.** Drei
+Dinge auf der Anfrage-Seite waren falsch, und zwei davon hat die Quelle selbst
+verraten — aber nur, weil die Messung ihren Wortlaut mitfuehrte statt nur
+`success`:
+
+- Auf `<ApplicationNumber>` im common-Namespace antwortet sie
+  `unexpected element: {...datadeliverycommon-1.0.0}ApplicationNumber` plus
+  `Maybe misspelled? - {...datadeliverytrademark-1.0.0}ApplicationNumber`.
+  Das Nummernfeld liegt im Register-Namespace. `<Id>`, das dieser Server
+  benutzte, findet mit keiner Nummernform etwas (`total=0`).
+- Unbekannte Action-Namen geben `unsupported action type: 'X'`;
+  `PatentPublicationSearch` dagegen `could not parse the action`. Der Name war
+  also richtig und der Rumpf falsch — das Request-Element gehoert in
+  `datadeliverypatentpublication-1.0.0`, nicht in den Patent-Namespace. Ohne
+  die drei erfundenen Namen als Kontrolle in derselben Messung haette ich vier
+  gleich aussehende Fehlschlaege gesehen und weiter Namen geraten.
+
+**Und die Stille ist auch eine Auskunft.** Zu `ApplicationNumberText` und
+`RegistrationNumber` gab die Quelle *keinen* Vorschlag. Dass sie bei einem Feld
+hilft und bei zwei anderen schweigt, heisst: die beiden existieren nicht. Eine
+Marke ist nicht über ihre Registernummer nachschlagbar — ohne die Kontrollen
+haette ich das fuer Zufall gehalten.
+
+**Was gefunden wird, ist nicht, was gesucht war.** `<Any>` mit einer Nummer
+liefert Treffer (397 bzw. 2), aber als Volltext über alle Felder. Als Ersatz
+fuer eine exakte Nummernsuche waere das eine stille Ungenauigkeit — gefunden
+schon, richtig nicht.
+
+**Eine Messsonde ist Code wie jeder andere.** Die Sonde fiel am 4.10.2026 in
+der CI an einer eigenen Liste von Tupeln verschiedener Laenge
+(`ValueError: too many values to unpack`, Lauf 37204275286): zwei Minuten
+Wartezeit und ein Lauf mit Zugangsdaten fuer etwas, das jeder Aufruf ohne Netz
+gezeigt haette. Was sich ohne Quelle pruefen laesst — Wohlgeformtheit der
+gebauten Anfragen, Form der Kandidatenlisten, dass die Nummern aus einem echten
+Satz stammen und nicht erfunden sind — steht jetzt in
+`tests/test_probe_request_forms.py`.
+
 **Messen geht von Hand, nicht nebenbei.** `scripts/probe_response_shape.py`
 berichtet die Form einer echten Antwort (Pfade, Attributnamen, Textlaengen,
 `TotalCount`-Wert), `scripts/record_live_fixtures.py` zeichnet sie auf (echte

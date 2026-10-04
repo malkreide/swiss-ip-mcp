@@ -17,13 +17,14 @@ on:
   workflow_dispatch:
     inputs:
       mode:
-        description: "messen (Struktur ins Log) oder aufzeichnen (Fixtures als Artifact)"
+        description: "messen (Struktur), aufzeichnen (Fixtures), anfrageformen (Id/Pagination/Action)"
         required: false
         default: messen
         type: choice
         options:
           - messen
           - aufzeichnen
+          - anfrageformen
       only:
         description: "Welche Abfrage messen (nur im Modus messen)"
         required: false
@@ -65,7 +66,7 @@ jobs:
       # uebersprungene Testlauf, vor dem `classify_live_run.py` warnt. Die
       # Sonde endet dann selbst mit 1.
       - name: Sonde
-        if: inputs.mode != 'aufzeichnen'
+        if: inputs.mode == 'messen'
         env:
           IGE_USERNAME: ${{ secrets.IGE_USERNAME }}
           IGE_PASSWORD: ${{ secrets.IGE_PASSWORD }}
@@ -118,3 +119,23 @@ jobs:
           path: fixtures-neu/
           if-no-files-found: error
           retention-days: 7
+
+      # Die Anfrage-Seite: Welche `Id`-Form findet einen Satz, nimmt die Quelle
+      # die Continuation als Action an, und welcher Action-Typ der
+      # Publikationssuche wird ueberhaupt geparst. Berichtet werden Formen und
+      # Zaehler, nicht die Nummern — die stammen aus echten Saetzen.
+      - name: Anfrageformen messen
+        if: inputs.mode == 'anfrageformen'
+        env:
+          IGE_USERNAME: ${{ secrets.IGE_USERNAME }}
+          IGE_PASSWORD: ${{ secrets.IGE_PASSWORD }}
+        run: |
+          {
+            echo '## Anfrageformen'
+            echo
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          python scripts/probe_request_forms.py 2>&1 | tee -a "$GITHUB_STEP_SUMMARY"
+          status=${PIPESTATUS[0]}
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          exit "$status"
