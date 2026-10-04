@@ -197,25 +197,77 @@ def anonymisierung_pruefen(root: ET.Element, original: ET.Element) -> list[str]:
     return probleme
 
 
+async def _folgeabfrage(name: str, build, out: Path, vergleich: ET.Element | None = None) -> list[str]:
+    """Eine Folgeabfrage fahren, pruefen, schreiben. Gibt `[name]` oder `[]`.
+
+    `vergleich` ist die erste Seite: Traegt die zweite dieselben Nummern, hat
+    der Token nicht gewirkt, und die Pagination ist eine Attrappe. Das wird
+    gemeldet, bevor irgendein Test darauf baut.
+    """
+    from swiss_ip_mcp.server import _call_api, _local
+
+    try:
+        root = await _call_api(build())
+    except Exception as exc:
+        print(f"{name}: FEHLGESCHLAGEN {type(exc).__name__}: {exc}", file=sys.stderr)
+        return []
+
+    def nummern(el: ET.Element) -> list[str]:
+        return sorted(
+            (e.text or "").strip()
+            for e in el.iter()
+            if _local(e.tag) == "ApplicationNumberText" and (e.text or "").strip()
+        )
+
+    if vergleich is not None:
+        a, b = nummern(vergleich), nummern(root)
+        if a and a == b:
+            print(f"{name}: BEFUND — Seite 2 traegt dieselben Saetze wie Seite 1", file=sys.stderr)
+        elif a and b:
+            print(f"{name}: Seite 2 traegt andere Saetze als Seite 1 ({len(b)} Stueck)")
+        else:
+            print(f"{name}: Seitenvergleich nicht moeglich (a={len(a)}, b={len(b)})", file=sys.stderr)
+
+    original = ET.fromstring(ET.tostring(root, encoding="unicode"))
+    anonymise(root)
+    probleme = anonymisierung_pruefen(root, original)
+    if probleme:
+        print(
+            f"{name}: NICHT GESCHRIEBEN — {len(probleme)} Beanstandung(en): " + "; ".join(sorted(set(probleme))[:5]),
+            file=sys.stderr,
+        )
+        return []
+    ziel = out / f"{name}.xml"
+    ziel.write_bytes(ET.tostring(root, encoding="utf-8", xml_declaration=True))
+    print(f"{name}: {ziel} ({ziel.stat().st_size} Bytes)")
+    return [name]
+
+
 async def _record(out: Path) -> int:
     import swiss_ip_mcp.server as srv
     from swiss_ip_mcp.server import (
+        _build_patent_pub_search,
         _build_patent_search,
         _build_spc_search,
         _build_trademark_search,
         _call_api,
         _esc,
+        _local,
         _quota_request,
     )
 
     def any_q(term: str) -> str:
         return f"<Any>{_esc(term)}</Any>"
 
-    # Dieselben Abfragen wie die Live-Tests und die Sonde.
+    # Dieselben Abfragen wie die Live-Tests und die Sonde, plus die
+    # Abfrageformen, die noch keine Aufzeichnung hatten: die Suche nach Nummer
+    # (`<Id>`), die Publikationssuche (eigener Action-Typ) und die zweite
+    # Seite. Ohne sie waere «alle Werkzeuge geprueft» eine Behauptung.
     auftraege = [
         ("trademark-search", lambda: _build_trademark_search(any_q("Zürich*"), 3)),
         ("patent-search", lambda: _build_patent_search(any_q("Roche*"), 3)),
         ("spc-search", lambda: _build_spc_search(any_q("Novartis*"), 3)),
+        ("patent-publication-search", lambda: _build_patent_pub_search(any_q("Roche*"), 3)),
         ("quota", _quota_request),
     ]
 
@@ -242,6 +294,50 @@ async def _record(out: Path) -> int:
         ziel.write_bytes(ET.tostring(root, encoding="utf-8", xml_declaration=True))
         print(f"{name}: {ziel} ({ziel.stat().st_size} Bytes)")
         geschrieben.append(name)
+
+    # Zwei Formen lassen sich nicht blind anfragen: Die Nummernsuche braucht
+    # eine echte Nummer, die zweite Seite einen echten Token. Beide werden aus
+    # einer frischen ersten Antwort gezogen und verlassen den Runner nur
+    # anonymisiert.
+    try:
+        erste = await _call_api(_build_trademark_search(any_q("Zürich*"), 3))
+    except Exception as exc:
+        print(f"Folgeabfragen entfallen: {type(exc).__name__}: {exc}", file=sys.stderr)
+        erste = None
+
+    if erste is not None:
+        nummern = [
+            (el.text or "").strip()
+            for el in erste.iter()
+            if _local(el.tag) == "ApplicationNumberText" and (el.text or "").strip()
+        ]
+        if nummern:
+            geschrieben += await _folgeabfrage(
+                "trademark-by-number",
+                lambda: _build_trademark_search(f"<Id>{_esc(nummern[0])}</Id>", 3),
+                out,
+            )
+        else:
+            print("keine ApplicationNumberText gefunden — Nummernsuche entfaellt", file=sys.stderr)
+
+        token = next(
+            (
+                (el.text or "").strip()
+                for el in erste.iter()
+                if _local(el.tag) == "Continuation" and (el.text or "").strip()
+            ),
+            "",
+        )
+        if token:
+            namen = await _folgeabfrage(
+                "trademark-search-seite2",
+                lambda: _build_trademark_search(any_q("Zürich*"), 3, token),
+                out,
+                vergleich=erste,
+            )
+            geschrieben += namen
+        else:
+            print("kein Continuation-Token gefunden — Seite 2 entfaellt", file=sys.stderr)
 
     if srv._client is not None:
         await srv._client.aclose()
