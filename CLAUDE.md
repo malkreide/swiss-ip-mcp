@@ -256,7 +256,7 @@ wurde, die dort nicht steht.
 
 **Ein Review, der nicht eingetragen ist, hält nichts auf — auch wenn er
 läuft.** Codex startet unter anderem beim Auslöser «Draft marked ready». Am
-4.10.2026 über die vier PRs jenes Tages in `swiss-ip-mcp` gemessen:
+4.10.2026 über die fünf PRs jenes Tages in `swiss-ip-mcp` gemessen:
 
 | PR | Review angekündigt | «Completed» | gemergt | Verdikt nach dem Merge |
 |---|---|---|---|---|
@@ -264,11 +264,15 @@ läuft.** Codex startet unter anderem beim Auslöser «Draft marked ready». Am
 | #95 | 13:00:37 | 13:01:27 | 13:00:34 | +53 s |
 | #96 | 14:31:02 | 14:32:08 | 14:30:57 | +71 s |
 | #97 | 16:14:19 | 16:15:14 | 16:14:32 | +42 s |
+| #98 | 20:19:36 | 20:20:30 | 20:19:24 | +66 s |
 
 Der Review braucht 50 bis 71 Sekunden, und das Draft-Flag fiel jedes Mal in
-derselben Minute wie der Merge. Viermal von vier kam das Verdikt also
-hinterher; bei #95 und #96 war der PR schon zu, bevor der Bot sich überhaupt
-gemeldet hatte.
+derselben Minute wie der Merge. Fünfmal von fünf kam das Verdikt also
+hinterher; bei #95, #96 und #98 war der PR schon zu, bevor der Bot sich
+überhaupt gemeldet hatte — bei #98 um zwölf Sekunden, der grösste gemessene
+Abstand. #98 ist der PR, der diese Tabelle einführte: Er wurde gemergt, bevor
+sein eigener Gegenstand berichten konnte, und lieferte damit die Zeile, die
+ihn beschreibt.
 
 Dass er nichts aufhält, ist gemessen und nicht geschlossen: Um 16:14, während
 der Review lief und nichts berichtet hatte, stand #97 auf
@@ -277,7 +281,7 @@ ergeben — genau die Unterscheidung aus dem Absatz darüber. Der Merge selbst
 taugt als Beleg nicht: Ihn führte ein Mensch aus, der eine Branch Protection
 überstimmen kann.
 
-**Was die Messung nicht hergibt, ist der Preis.** Alle vier Reviews endeten
+**Was die Messung nicht hergibt, ist der Preis.** Alle fünf Reviews endeten
 ohne Fund (👍 statt Kommentar), verloren ist also nichts. Der Fall mit dem Fund
 steht weiter oben und war Glück: Auf `swiss-environment-mcp` PR #113 kam der
 Befund vierzehn Sekunden vor dem Merge an — dieselbe Minute, andere Seite der
