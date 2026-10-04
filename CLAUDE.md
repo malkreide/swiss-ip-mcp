@@ -284,28 +284,10 @@ wie der Code: Nichts ist rot, weil nichts geprüft wird, worauf es ankommt.
 
 ## Teil 2 — Dieses Repo
 
-**ruff: eine Quelle.** `pyproject.toml`, `dev`-Extra, ein exakter
-`ruff==`-Pin — die Version dort nachlesen, nicht hier: Diese Zeile nannte sie
-wörtlich und stand am 8.9.2026 auf `0.16.3`, während `pyproject.toml` längst
-`0.16.4` führte. Eine zweite Quelle in einem Absatz namens «eine Quelle». Die CI
-hat keinen eigenen Pin-Schritt — der Install über `ci.yml` genügt, lokal wie
-dort. Eine `.pre-commit-config.yaml` gibt es nicht; wenn eine dazukommt, muss
-sie dieselbe Version aus `pyproject.toml` beziehen und keine zweite nennen.
+### Gates und ihre Fallen
 
-Vor dem Lauf `ruff --version` prüfen: ein älteres ruff früher im `PATH`
-schlägt den Pin, ohne dass der Install etwas meldet.
-
-Meldet `scripts/check_ruff_pin.py` genau das, hilft ein zweiter `pip install`
-nicht: das ältere Binary bleibt vorne im `PATH`. Die Gates dann über das Modul
-fahren — `python -m ruff check …`, `python -m ruff format --check …`. Am
-18.8.2026 lagen so 0.15.8 (PATH) und 0.16.1 (Modul) nebeneinander; `ruff
-format --check` war mit beiden grün, was den Unterschied nicht widerlegt.
-
-`line-length = 120` steht unter `[tool.ruff]`. Im Portfolio stehen daneben 88
-und 100: aus einem anderen Server kopierter Code ist hier lint-sauber und
-fällt trotzdem bei `ruff format --check` um.
-
-**Gates, wörtlich aus `ci.yml`** (Matrix: Python 3.11 / 3.12 / 3.13):
+**Gates, wörtlich aus `ci.yml`** (Job `quality`, Matrix 3.11 / 3.12 / 3.13,
+keine `if:`-Ausnahme, kein `fail-fast: false`):
 
 ```
 python scripts/check_ruff_pin.py
@@ -317,50 +299,70 @@ pytest tests/ -m "not live" -v
 python scripts/check_version_sync.py
 ```
 
+`secret-scan.yml` gatet ebenfalls jeden PR, steht in keiner dieser Zeilen und
+lässt sich lokal mit keinem der Befehle nachstellen.
+
+**ruff: eine Quelle.** Der exakte `ruff==`-Pin steht im `dev`-Extra von
+`pyproject.toml` — die Version dort nachlesen, nicht hier: Diese Zeile nannte
+sie wörtlich und stand am 8.9.2026 auf `0.16.3`, während `pyproject.toml`
+längst `0.16.4` führte. Eine zweite Quelle in einem Absatz namens «eine
+Quelle». Kommt eine `.pre-commit-config.yaml` dazu, muss sie dieselbe Version
+beziehen und keine zweite nennen.
+
+Ein älteres ruff früher im `PATH` schlägt den Pin, ohne dass der Install etwas
+meldet. Meldet `scripts/check_ruff_pin.py` genau das, hilft ein zweiter
+`pip install` nicht — dann die Gates über das Modul fahren
+(`python -m ruff check …`). Am 18.8.2026 lagen so 0.15.8 (PATH) und 0.16.1
+(Modul) nebeneinander, und `ruff format --check` war mit beiden grün: Das
+widerlegt den Unterschied nicht.
+
+`line-length = 120` steht unter `[tool.ruff]`; im Portfolio stehen daneben 88
+und 100. Aus einem anderen Server kopierter Code ist hier lint-sauber und
+fällt trotzdem bei `ruff format --check` um.
+
 **Kein `include` unter `[tool.ruff]` setzen.** Hier stand
 `include = ["src/**/*.py"]`, während das Gate `src/ tests/ scripts/` nennt:
-ruff verengte den Umfang still auf `src/` und prüfte 5 von 14 Dateien. Der
-Befehl sagte das eine, geprüft wurde das andere, und nichts widersprach —
-`tests/` und `scripts/` sammelten dabei 4 Lint-Fehler und 4
-Format-Abweichungen an. Der Umfang sind die drei Pfade im Gate-Befehl selbst.
-Wer ihn prüfen will, zählt nach statt hier abzulesen:
+ruff verengte den Umfang still auf 5 von 14 Dateien, und `tests/` und
+`scripts/` sammelten 4 Lint-Fehler und 4 Format-Abweichungen an. Der Befehl
+sagte das eine, geprüft wurde das andere, und nichts widersprach. Der Umfang
+sind die drei Pfade im Gate selbst; nachzählen statt hier ablesen:
 `ruff check src/ tests/ scripts/ --show-files | wc -l`.
 
-Der `py_compile`-Schritt fehlte hier, obwohl der Block «wörtlich» heisst — er
-steht in `ci.yml` zwischen Format-Check und Tests. Alle Schritte laufen im Job
-`quality` auf allen drei Versionen, keine `if:`-Ausnahme; ein
-`fail-fast: false` steht nicht da.
+**Der pytest-Schritt läuft ohne Bedingung, und das bleibt so.** Er stand als
+`if [ -d "tests" ]; then pytest …; else echo "… skipping."; fi` — verschwand
+`tests/`, gab er Exit 0 und der Lauf wurde grün, ohne einen Test gefahren zu
+haben. Jetzt endet pytest ohne `tests/` mit 4 und bei leerer Sammlung mit 5;
+beides rot, beides richtig. Übersprungen ist nicht bestanden (OPS-005).
 
-**Der pytest-Schritt war bedingt — seit diesem Commit nicht mehr.** In
-`ci.yml` stand er als `if [ -d "tests" ]; then pytest …; else echo "No tests
-directory found, skipping."; fi`. Verschwand `tests/`, gab der Schritt Exit 0
-und der Lauf wurde grün, ohne einen einzigen Test gefahren zu haben — ein
-grüner Haken, der «nichts geprüft» bedeutet.
+**actionlint prüft nur so viel, wie im `PATH` liegt.** Für `run:`-Blöcke ruft
+es `shellcheck`, für Python-Blöcke `pyflakes`; fehlt eines, schaltet es die
+Regel ab und endet trotzdem mit 0. Deshalb liegt `shellcheck-py` im
+`dev`-Extra; `pyflakes` fehlt überall, die Regel ist also überall aus. Wer
+wissen will, was lief, liest die `Rule … was disabled`-Zeilen von
+`actionlint -verbose` statt den grünen Haken.
 
-Jetzt läuft `pytest` ohne Bedingung. Fehlt `tests/`, endet es mit 4; sammelt
-es nach `-m "not live"` nichts ein, mit 5. Beides ist rot, und beides ist die
-richtige Antwort: Ein Unit-Gate ohne Unit-Tests hat nichts zugesichert.
+**Keine Ausdrucks-Klammern in Kommentaren innerhalb von `run:`.** GitHub
+wertet `${{ … }}` im ganzen Block aus, auch in Shell-Kommentarzeilen;
+YAML-Kommentare ausserhalb sind unkritisch. Ein leeres Paar in `live.yml`
+(`8aff614`, 8.9.2026) machte die Datei ungültig, und das Symptom sieht nicht
+nach Syntaxfehler aus: ein roter Lauf ohne einen einzigen Job, benannt nach dem
+Dateipfad statt «Live Tests» — obwohl die Datei keinen `push`-Auslöser hat. Der
+Schaden war leise: Die Wochenläufe vom 14.9. und 21.9. fanden nicht statt.
+`yaml.safe_load` merkt davon nichts, `actionlint` schon — seit 25.9.2026 Gate.
 
-Den Zweig nicht zurückholen. Übersprungen ist nicht bestanden (OPS-005), und
-ein Verzeichnis, dessen Fehlen kein Gate rot macht, ist genau die Bauart, vor
-der Teil 1 warnt.
+### Vor einem Release
 
-**`secret-scan.yml` gatet ebenfalls jeden PR** und stand in keiner Liste.
-Lokal stellt ihn keiner der Befehle oben nach.
+**Die Laufzeitabhängigkeiten der Wheels vergleichen, nicht die Commits.**
+`check_version_sync.py` hält fünf Versionsstellen gleich; ob eine Änderung,
+die Nutzer trifft, im CHANGELOG steht, prüft nichts. Bei 1.2.0 fiel erst beim
+Versionssprung auf, dass `mcp[cli]` aus `dependencies` ins `dev`-Extra
+gewandert war (`8a6e346`, kein Eintrag) — jede Installation verliert damit den
+`mcp`-Befehl.
 
-**Vor einem Release die Laufzeitabhängigkeiten der Wheels vergleichen, nicht
-die Commits.** `check_version_sync.py` hält fünf Versionsstellen gleich; ob
-eine Änderung, die Nutzer trifft, im CHANGELOG steht, prüft nichts. Bei 1.2.0
-fiel erst beim Versionssprung auf, dass `8a6e346` — `mcp[cli]` aus
-`dependencies` ins `dev`-Extra — keinen Eintrag trug, obwohl jede Installation
-damit den `mcp`-Befehl verliert.
-
-Die Commit-Liste taugt dafür nicht als Raster. Seit `v1.1.6` fassten zwölf
-Commits `src/` oder `pyproject.toml` an, zehn davon ohne CHANGELOG, und neun
-dieser zehn zu Recht (ruff-Pins, CI, Formatierung). Wer jeden
-`pyproject`-Commit verdächtigt, sucht den einen zwischen neun Fehlalarmen.
-Entscheidend ist der Abschnitt, nicht die Datei — und den zeigt das gebaute
-Paket:
+Die Commit-Liste taugt nicht als Raster: Seit `v1.1.6` fassten zwölf Commits
+`src/` oder `pyproject.toml` an, zehn ohne CHANGELOG, neun davon zu Recht
+(ruff-Pins, CI, Formatierung). Entscheidend ist der Abschnitt, nicht die Datei,
+und den zeigt das gebaute Paket:
 
 ```bash
 pip download --no-deps "swiss-ip-mcp==<letzte Version>" -d /tmp/alt
@@ -369,176 +371,173 @@ for w in /tmp/alt/*.whl /tmp/neu/*.whl; do unzip -p "$w" '*/METADATA' | grep '^R
 diff /tmp/alt/*.req /tmp/neu/*.req
 ```
 
-Nachgemessen am 27.9.2026 mit 1.1.6 von PyPI gegen den Stand von 1.2.0: Der
-Diff zeigt genau zwei Änderungen — `fastmcp` entfernt (stand im CHANGELOG) und
-`mcp[cli]` → `mcp` (stand nicht darin). Die neun übrigen Commits erscheinen
-nicht. Ohne `grep -v 'extra =='` wären es acht Diff-Zeilen statt drei, fast
-alle aus dem `dev`-Extra; der Filter ist also das, was Nutzer- von
-Entwicklerseite trennt. Gegenprobe: dasselbe Wheel gegen sich selbst ergibt
-Exit 0.
+Nachgemessen am 27.9.2026 (1.1.6 von PyPI gegen 1.2.0): genau zwei Änderungen
+— `fastmcp` entfernt (im CHANGELOG) und `mcp[cli]` → `mcp` (nicht darin). Die
+neun übrigen Commits erscheinen nicht. Ohne `grep -v 'extra =='` wären es acht
+Zeilen statt drei, fast alle aus dem `dev`-Extra: Der Filter trennt Nutzer- von
+Entwicklerseite. Gegenprobe: dasselbe Wheel gegen sich selbst ergibt Exit 0.
 
-Jede Zeile, die der Diff zeigt, braucht einen CHANGELOG-Eintrag. Was er nicht
-zeigt, deckt er nicht ab: Verhaltensänderungen im Code selbst stehen nie in
-`Requires-Dist` — für die bleibt es beim Lesen von `git log -- src/`.
+Jede Zeile des Diffs braucht einen CHANGELOG-Eintrag. Was er nicht zeigt, deckt
+er nicht ab — Verhaltensänderungen im Code stehen nie in `Requires-Dist`, dafür
+bleibt `git log -- src/`.
 
-**Der Parser hat die Quelle nie getroffen — und kein Test konnte das sehen.**
-Am 4.10.2026 liefen die Live-Tests erstmals mit echten Zugangsdaten.
-`_parse_result_page` suchte Satzelemente `Item` und einen Zaehler
-`Meta/TotalCount`; die Quelle folgt WIPO ST.96 und kennt beides nicht. Ein Satz
-ist ein direktes Kind von `Result` mit `role="item"` — bei Marken ein `Data`,
-bei Patenten und SPC ein `DataBag` —, der Zaehler heisst `Meta/TotalItemCount`.
-Jede Antwort kam als `count: 0, total: null` an, auch die mit drei Saetzen und
-201798 Treffern.
+### Der Vertrag mit swissreg.ch
 
-Es war **keine Drift**. Es war von Anfang an falsch, und unsichtbar, weil die
-handgeschriebenen Fixtures dieselben falschen Namen nannten wie der Parser.
-171 gruene Unit-Tests, und die einzige Zusicherung gegen die echte Quelle —
-`assert result["count"] > 0` — war die, die fiel. Genau der Mechanismus, vor
-dem Teil 1 unter «Tests» warnt; hier steht er als Rechnung, nicht als Warnung.
+Am 4.10.2026 liefen die Live-Tests erstmals mit echten Zugangsdaten, und es
+zeigte sich: **Der Server hatte die Quelle nie getroffen** — auf beiden Seiten,
+Antwort und Anfrage. Was jetzt gilt, ist gemessen und in
+`tests/fixtures/live/` aufgezeichnet.
 
-Drei Handgriffe daraus:
+| Antwort (WIPO ST.96) | Wo |
+|---|---|
+| ein Datensatz | direktes Kind von `Result` mit `role="item"` — Marken `Data`, Patente und SPC `DataBag` |
+| Gesamttreffer | `Meta/TotalItemCount` (dazu `ItemCount`, `ItemCountOffset`) |
+| Folgeseiten-Token | **Textinhalt** von `Continuations/Continuation` |
+| Absage der Quelle | `Result/@success="false"` plus `Log/LogEntry` — bei HTTP **200** |
+
+| Anfrage | Form |
+|---|---|
+| Folgeseite | `Continuation` als **Action** in der nächsten `ApiRequest` (sie gehört zur `AbstractAction`-Gruppe), nicht `<Page token="…">` |
+| exakte Nummernsuche | `<ns:ApplicationNumber>` im **Register**-Namespace (`tm:`/`pat:`/`spc:`), Nummer als Text |
+| Publikationssuche | Request-Element in `datadeliverypatentpublication-1.0.0` |
+
+**Was es nicht gibt:** `Item`, `Meta/TotalCount`, `<Id>` als Feld für
+Registerdaten, `RegistrationNumber` oder `ApplicationNumberText` als
+Abfragefeld. Eine Marke ist nicht über ihre Registernummer nachschlagbar.
+
+Die Rechnung: Jede Antwort kam als `count: 0, total: null` an, auch die mit
+drei Sätzen und 201798 Treffern. Seite 2 war immer Seite 1.
+`swiss_ip_search_patent_publications` bekam seit je `could not parse the action
+PatentPublicationSearch` und gab das als «nichts gefunden» weiter — 39578
+Treffer für `Roche*`, die niemand sah.
+
+Fünf Handgriffe daraus:
 
 - **Satzgrenze ist, was die Quelle markiert, nicht was der Payload heisst.**
-  `BibliographicData` kommt in einer Patent-Antwort 4× bei 3 Saetzen vor; eines
-  steckt in `PatentPublication`. Wer Payloads zaehlt, zaehlt falsch.
+  `BibliographicData` kommt in einer Patent-Antwort 4× bei 3 Sätzen vor, eines
+  verschachtelt unter `PatentPublication`. `role="item"` schliesst nebenbei
+  die Kontingent-Antwort (`role="quota"`) von selbst aus.
+- **Ein `success="false"` ist kein leeres Ergebnis.** `raise_for_status()` ist
+  mit HTTP 200 zufrieden, und wer nur Sätze zählt, meldet null. Der
+  403-Absatz aus Teil 1, eine Ebene tiefer: Nicht der Statuscode entscheidet,
+  sondern ob die Quelle die Frage beantwortet hat.
+- **Die Fehlermeldung ist eine Auskunft.** Auf `<ApplicationNumber>` im
+  common-Namespace antwortet die Quelle `Maybe misspelled? -
+  {…datadeliverytrademark-1.0.0}ApplicationNumber` — sie nennt die Lösung
+  selbst. Unbekannte Action-Namen geben `unsupported action type`,
+  `PatentPublicationSearch` dagegen `could not parse the action`: Name richtig,
+  Rumpf falsch. Beides sieht nur, wer den Wortlaut mitführt statt bloss
+  `success`.
+- **Die Stille ist auch eine Auskunft — aber nur neben einer Kontrolle.** Zu
+  `ApplicationNumberText` und `RegistrationNumber` schwieg die Quelle, während
+  sie bei `ApplicationNumber` half: Die beiden existieren nicht. Dasselbe bei
+  den Action-Namen, wo drei erfundene als Nulllinie mitliefen — sonst wären es
+  vier gleich aussehende Fehlschläge gewesen und das Raten wäre weitergegangen.
+- **Was gefunden wird, ist nicht, was gesucht war.** `<Any>` mit einer Nummer
+  liefert Treffer (397 bzw. 2), aber als Volltext über alle Felder. Als Ersatz
+  für eine exakte Nummernsuche eine stille Ungenauigkeit.
+
+**Warum kein Test das sehen konnte**, ist die eigentliche Lektion: Die
+handgeschriebenen Fixtures nannten dieselben falschen Namen wie
+`_parse_result_page`. 171 grüne Unit-Tests, und die einzige Zusicherung gegen
+die echte Quelle —
+`assert result["count"] > 0` — war die, die fiel. Der Mechanismus, vor dem
+Teil 1 unter «Tests» warnt, hier als Rechnung statt als Warnung.
+
+Messläufe: 37198882345, 37198983962 (Antwortform), 37204457180 (Pagination,
+Rumpf), 37204541287 (Nummernfeld), 37204640122 (Patente, SPC).
+
+### Aufzeichnungen und Messsonden
+
+`tests/fixtures/live/` hält echte Antworten: Form echt, Textwerte synthetisch,
+Aufnahmedatum in `RECORDING.md`. Echt bleiben Elementnamen, Namespaces,
+Verschachtelung, Anzahl, Attribute, die `Meta`-Zähler (sie müssen zur Satzzahl
+passen) und die `LogEntry`-Meldungen (sie betreffen die eigene Anfrage). Die
+Dateien belegen die **Form**, nicht den Inhalt: Ein Test darf daraus ableiten,
+wie die Felder heissen, nicht wie ein Datensatz aussieht.
+
+Zwei Kopplungen halten das zusammen, beide Lehren aus Fehlern:
+
 - **Ein handgeschriebenes Beispiel wird gegen die Aufzeichnung gehalten, nicht
-  statt ihr.** `TestBeispieleStimmenMitDerAufzeichnung` faellt, wenn beide
-  auseinandergehen; ohne so eine Kopplung ist das Beispiel wieder nur die
-  Annahme seines Autors.
+  statt ihr.** `TestBeispieleStimmenMitDerAufzeichnung` fällt, wenn beide
+  auseinandergehen; ohne diese Kopplung ist das Beispiel wieder nur die Annahme
+  seines Autors.
 - **Was synthetisch aussieht, beschreibt eine Stelle.** Der Rekorder sagt es
   (`ist_synthetisch`), die Zusicherung im Repo fragt ihn. Zwei Beschreibungen
   desselben Musters gehen auseinander — am 4.10.2026 galt `MUST`, ein
   abgeschnittenes `MUSTER`, als Registerinhalt.
 
-**Und ein `success="false"` ist kein leeres Ergebnis.** Die API antwortet auf
-eine Anfrage, die sie nicht parsen kann, mit HTTP **200** und
-`<Result success="false">` plus `Log`. `raise_for_status()` ist damit zufrieden.
-`swiss_ip_search_patent_publications` bekommt seit je
-`could not parse the action PatentPublicationSearch` und gab das als «nichts
-gefunden» weiter. Das ist der 403-Absatz aus Teil 1, eine Ebene tiefer: nicht
-der Statuscode entscheidet, sondern ob die Quelle die Frage beantwortet hat.
+**Messen geht von Hand.** Drei Sonden, alle über `shape-probe.yml` per
+`workflow_dispatch`:
 
-**Die Pagination war eine Attrappe.** Der Token steht im Textinhalt von
-`Continuations/Continuation`; der Code gab ihn als `<Page token="...">` zurueck,
-und Seite 2 trug dieselben Saetze wie Seite 1. Die Doku sagt, warum:
-`Continuation` gehoert zur `AbstractAction`-Gruppe und wird als ganzes Element
-in die naechste `ApiRequest` kopiert. Bis das umgebaut ist, gibt der Server
-`next_page_token: null` — ein Token, der die erste Seite endlos wiederholt, ist
-schaedlicher als keiner.
+| Modus | Skript | Ausgabe |
+|---|---|---|
+| `messen` | `scripts/probe_response_shape.py` | Form einer Antwort (Pfade, Attributnamen, Textlängen) ins Log |
+| `aufzeichnen` | `scripts/record_live_fixtures.py` | Fixtures als Artifact, Selbstkontrolle vor dem Schreiben |
+| `anfrageformen` | `scripts/probe_request_forms.py` | Id-Formen, Pagination, Action-Rumpf — je mit Nulllinie |
 
-**Die Fehlermeldung der Quelle ist eine Auskunft, nicht nur eine Absage.** Drei
-Dinge auf der Anfrage-Seite waren falsch, und zwei davon hat die Quelle selbst
-verraten — aber nur, weil die Messung ihren Wortlaut mitfuehrte statt nur
-`success`:
-
-- Auf `<ApplicationNumber>` im common-Namespace antwortet sie
-  `unexpected element: {...datadeliverycommon-1.0.0}ApplicationNumber` plus
-  `Maybe misspelled? - {...datadeliverytrademark-1.0.0}ApplicationNumber`.
-  Das Nummernfeld liegt im Register-Namespace. `<Id>`, das dieser Server
-  benutzte, findet mit keiner Nummernform etwas (`total=0`).
-- Unbekannte Action-Namen geben `unsupported action type: 'X'`;
-  `PatentPublicationSearch` dagegen `could not parse the action`. Der Name war
-  also richtig und der Rumpf falsch — das Request-Element gehoert in
-  `datadeliverypatentpublication-1.0.0`, nicht in den Patent-Namespace. Ohne
-  die drei erfundenen Namen als Kontrolle in derselben Messung haette ich vier
-  gleich aussehende Fehlschlaege gesehen und weiter Namen geraten.
-
-**Und die Stille ist auch eine Auskunft.** Zu `ApplicationNumberText` und
-`RegistrationNumber` gab die Quelle *keinen* Vorschlag. Dass sie bei einem Feld
-hilft und bei zwei anderen schweigt, heisst: die beiden existieren nicht. Eine
-Marke ist nicht über ihre Registernummer nachschlagbar — ohne die Kontrollen
-haette ich das fuer Zufall gehalten.
-
-**Was gefunden wird, ist nicht, was gesucht war.** `<Any>` mit einer Nummer
-liefert Treffer (397 bzw. 2), aber als Volltext über alle Felder. Als Ersatz
-fuer eine exakte Nummernsuche waere das eine stille Ungenauigkeit — gefunden
-schon, richtig nicht.
+Ein **neuer** Workflow ist erst dispatchbar, wenn seine Datei auf dem
+Default-Branch liegt (sonst `404`); die **Inputs** werden gegen die Fassung des
+`ref` geprüft, dort lässt sich also auf einem Branch iterieren.
 
 **Eine Messsonde ist Code wie jeder andere.** Die Sonde fiel am 4.10.2026 in
-der CI an einer eigenen Liste von Tupeln verschiedener Laenge
-(`ValueError: too many values to unpack`, Lauf 37204275286): zwei Minuten
-Wartezeit und ein Lauf mit Zugangsdaten fuer etwas, das jeder Aufruf ohne Netz
-gezeigt haette. Was sich ohne Quelle pruefen laesst — Wohlgeformtheit der
-gebauten Anfragen, Form der Kandidatenlisten, dass die Nummern aus einem echten
-Satz stammen und nicht erfunden sind — steht jetzt in
+der CI an einer eigenen Liste von Tupeln verschiedener Länge (Lauf
+37204275286) — zwei Minuten Wartezeit und ein Lauf mit Zugangsdaten für etwas,
+das jeder Aufruf ohne Netz gezeigt hätte. Was ohne Quelle prüfbar ist, steht in
 `tests/test_probe_request_forms.py`.
 
-**Messen geht von Hand, nicht nebenbei.** `scripts/probe_response_shape.py`
-berichtet die Form einer echten Antwort (Pfade, Attributnamen, Textlaengen,
-`TotalCount`-Wert), `scripts/record_live_fixtures.py` zeichnet sie auf (echte
-Form, synthetische Texte, Selbstkontrolle vor dem Schreiben). Beide laufen ueber
-`shape-probe.yml` per `workflow_dispatch`, Ausgabe als Log bzw. Artifact. Ein
-neuer Workflow ist erst dispatchbar, wenn seine Datei auf dem Default-Branch
-liegt (`404` sonst); die **Inputs** dagegen werden gegen die Fassung des `ref`
-geprueft, dort laesst sich also auf einem Branch iterieren.
+**Kandidaten aus einem echten Satz ableiten, nicht erfinden.** Wer eine Nummer
+erfindet, misst nicht das Format, sondern nur, dass die Nummer nicht existiert.
 
-**Live-Tests: geplanter Workflow vorhanden.** `.github/workflows/live.yml`,
-`cron: "0 3 * * 1"` plus `workflow_dispatch`. Die Live-Suite ist also nicht bloss
-per `-m "not live"` ausgeschlossen — DRIFT-005 ist hier erfüllt. `schedule`
-greift nur auf dem Default-Branch (`main`): Änderungen am Workflow wirken erst
-nach dem Merge, vorher von Hand per `workflow_dispatch`.
+### Die Live-Suite und ihr Melder
 
-**Der Live-Job ist rot, und das ist die richtige Antwort.** Die Secrets
-`IGE_USERNAME` / `IGE_PASSWORD` sind im Repo nicht gesetzt; ohne sie
-überspringt jeder der vier Live-Tests (`skipif(not LIVE)`, `LIVE =
-_live_enabled()`). Bis zum 24.8.2026 meldete der Job dafür Erfolg — zehn grüne
-wöchentliche Läufe, in denen nichts gegen swissreg.ch geprüft wurde. Seit
-`ab38c24` ist er rot. Grün wird er nicht durch eine Änderung an `live.yml`,
-sondern durch die Secrets. Wer die Fehlermeldung des Jobs für den Fehler hält
-und `live.yml` daraufhin repariert, repariert den Melder.
+`.github/workflows/live.yml`, `cron: "0 3 * * 1"` plus `workflow_dispatch`.
+`schedule` greift nur auf dem Default-Branch (hier `main`): Änderungen wirken
+erst nach dem Merge, vorher von Hand.
 
-**Ein halb gesetztes Secret ist schlimmer als gar keines.** Die Schranke im
-Workflow und die Marke in `tests/test_server.py` fragten beide allein nach
-`IGE_USERNAME`, `_load_credentials` verlangt aber Benutzername **und**
-Passwort. Wer nur den Benutzernamen setzt, kommt an beiden vorbei, die vier
-Live-Tests laufen los und fallen geschlossen an einem `ToolError` — und die
-Einordnung sieht Fehler im JUnit-XML, meldet `finding` und lässt ein Issue
-aufgehen, das swissreg.ch einen gebrochenen Vertrag unterstellt. Ein fehlendes
-Secret ist kein Befund über die Quelle; beides prüft jetzt beide Variablen,
-und der richtige Befund bleibt `unknown`.
+**Seit dem 4.10.2026 sind `IGE_USERNAME` und `IGE_PASSWORD` gesetzt und der
+Lauf ist `clear`** — 4 von 4 Tests ausgeführt, nicht übersprungen (Lauf
+37209564726). Der erste Lauf, der überhaupt etwas über den Vertrag mit der
+Quelle festgestellt hat; das zugehörige Issue hat der Workflow selbst
+geschlossen.
 
-Die erste Fassung dieser Meldung war trotzdem falsch: Der Nicht-Lauf reichte
-`--pytest-exit 127` durch, und die Einordnung machte daraus «pytest ist nicht
-bis zum Schreiben gekommen (Exit 127)». 127 heisst «command not found» — der
-Job behauptete einen gescheiterten pytest-Aufruf, den es nie gab, und schickte
-den Leser hinter einem fehlenden Binary her. Wer einen Zustand meldet, den er
-selbst herbeigeführt hat, benennt ihn; ein geliehener Exit-Code ist kein Grund.
-Dafür gibt es jetzt `--not-started`.
+**Vorher war er rot, und das war die richtige Antwort.** Ohne Zugangsdaten
+überspringt jeder Live-Test (`skipif(not LIVE)`), und bis zum 24.8.2026
+meldete der Job dafür Erfolg — zehn grüne Wochenläufe, in denen nichts geprüft
+wurde; seit `ab38c24` war er rot. Wer die Fehlermeldung eines solchen Jobs für
+den Fehler hält und `live.yml` daraufhin repariert, repariert den Melder.
 
-Und die zweite Fassung sagte «Unvollständige IGE-Zugangsdaten» auch dann, wenn
-gar nichts gesetzt war — also im einzigen Fall, den das Repo tatsächlich hat.
-Der Absatz darüber lebt vom Unterschied zwischen halb und gar nicht, die
-Meldung ebnete ihn wieder ein: Wer «unvollständig» liest, sucht die zweite
-Hälfte eines Secrets, das nie eine erste hatte. Der Text nennt jetzt beide
-Lagen getrennt.
+Der Melder brauchte vier Fassungen, jede Korrektur eine eigene Lektion:
 
-**Und der Melder selbst kann sich überschreiben.** Der Schritt «Ergebnis
-einordnen» hängte die letzten vierzig Zeilen der pytest-Ausgabe über einen
-Heredoc mit dem festen Trennwort `PYTEST_TAIL` an `$GITHUB_OUTPUT` an — in
-dieselbe Datei, in die `classify_live_run.py` eine Zeile vorher `state=` und
-`reason=` geschrieben hat. Steht in der Ausgabe eine Zeile `PYTEST_TAIL`, endet
-der Block dort, und der Runner liest den Rest als weitere Outputs. Nachgestellt
-am 8.9.2026: aus `state=unknown` wurde `state=clear`, der rote Lauf wäre grün
-geworden und hätte das offene Issue geschlossen. Die pytest-Ausgabe ist fremder
-Text — dieselbe Begründung, die im Skript-Schritt darunter schon zweimal steht,
-nur eine Ebene tiefer. Das Trennwort wird jetzt je Lauf zufällig gezogen.
+- **Ein halb gesetztes Secret ist schlimmer als gar keines.** Die Schranke im
+  Workflow und die Marke in `tests/test_server.py` fragten allein nach
+  `IGE_USERNAME`, `_load_credentials` verlangt beides. Mit halben Zugangsdaten
+  fallen die Live-Tests geschlossen an einem
+  `ToolError`, die Einordnung meldet `finding` — ein Issue, das swissreg.ch
+  einen Vertragsbruch unterstellt wegen eines fehlenden Secrets. Der richtige
+  Befund ist `unknown`.
+- **Ein geliehener Exit-Code ist kein Grund.** Der Nicht-Lauf reichte
+  `--pytest-exit 127` durch; die Einordnung machte daraus «pytest ist nicht bis
+  zum Schreiben gekommen (Exit 127)», also «command not found», also die Suche
+  nach einem fehlenden Binary. Wer einen Zustand meldet, den er selbst
+  herbeigeführt hat, benennt ihn — dafür gibt es `--not-started`.
+- **Die Meldung muss den Unterschied halten, von dem sie lebt.** Fassung zwei
+  sagte «Unvollständige IGE-Zugangsdaten» auch dann, wenn gar nichts gesetzt
+  war. Wer «unvollständig» liest, sucht die zweite Hälfte eines Secrets, das
+  nie eine erste hatte.
+- **Der Melder kann sich selbst überschreiben.** Die pytest-Ausgabe ging über
+  einen Heredoc mit festem Trennwort `PYTEST_TAIL` in `$GITHUB_OUTPUT` —
+  dieselbe Datei, in die `classify_live_run.py` `state=` schreibt. Steht
+  `PYTEST_TAIL` in der Ausgabe, endet der Block dort und der Rest wird als
+  Output gelesen. Nachgestellt am 8.9.2026: aus `state=unknown` wurde
+  `state=clear`, der rote Lauf wäre grün geworden und hätte das Issue
+  geschlossen. Das Trennwort wird je Lauf zufällig gezogen.
 
-**Keine Ausdrucks-Klammern in Kommentaren innerhalb von `run:`.** GitHub wertet
-`${{ … }}` im ganzen `run:`-Block aus, auch in Zeilen, die für die Shell
-Kommentare sind; YAML-Kommentare ausserhalb des Blocks sind unkritisch. Ein
-leeres Paar in einem Shell-Kommentar von `live.yml` (seit `8aff614`, 8.9.2026)
-machte die Datei ungültig. Das Symptom sieht nicht nach Syntaxfehler aus: Jeder
-Push erzeugte einen roten Lauf ohne einen einzigen Job, benannt nach dem
-Dateipfad statt «Live Tests» — obwohl `live.yml` gar keinen `push`-Auslöser hat.
-Der eigentliche Schaden war leise: Die Wochenläufe vom 14.9. und 21.9. fanden
-gar nicht statt. `yaml.safe_load` merkt davon nichts; `actionlint` schon — es
-steht deshalb seit dem 25.9.2026 als Gate in `ci.yml`, exakt gepinnt im
-`dev`-Extra wie ruff.
-
-**actionlint prüft nur so viel, wie im `PATH` liegt.** Für die `run:`-Blöcke
-ruft es `shellcheck` auf und für Python-Blöcke `pyflakes`; fehlt eines, schaltet
-es die Regel ab und endet trotzdem mit 0. Der Runner bringt ein shellcheck mit,
-ein Laptop meist keines — deshalb ist `shellcheck-py` mit im `dev`-Extra.
-`pyflakes` fehlt auf beiden Seiten gleich, die Regel ist also überall aus.
-Wer wissen will, was tatsächlich lief, liest die `Rule … was disabled`-Zeilen
-von `actionlint -verbose`, statt aus dem grünen Haken zu schliessen.
+**Und die Suite selbst war kaputt, nicht nur ihr Melder.** `_client` ist ein
+Modul-Global; eine gepoolte Verbindung gehört aber der Loop, die sie geöffnet
+hat, und `pytest-asyncio` gibt jedem Test eine eigene. Zwei der vier Live-Tests
+fielen an `RuntimeError: Event loop is closed` — rot, rot, grün, rot, weil der
+Pool zwischendurch neu aufbaut. Die Klasse läuft jetzt in einer Loop
+(`loop_scope="class"`), wie im Betrieb, wo `_lifespan` eine Loop für den
+Prozess besitzt. Den Client je Test wegzuwerfen hätte je Test ein neues Token
+geholt, wovon die API-Doku abrät.
