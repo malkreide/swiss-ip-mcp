@@ -359,29 +359,114 @@ def _el_to_dict(el: ET.Element, depth: int = 0) -> dict | str:
     return result
 
 
+def _result_element(root: ET.Element) -> Optional[ET.Element]:
+    """The single `Result` element of a response, or None if there is none."""
+    for el in root.iter():
+        if _local(el.tag) == "Result":
+            return el
+    return None
+
+
+def _assert_result_ok(root: ET.Element) -> None:
+    """Raise if the source says it did not fulfil the request (DRIFT-006).
+
+    The API answers a request it cannot parse with HTTP **200** and
+    `<Result success="false">` plus a `Log`. `raise_for_status()` is happy with
+    that, and a parser that only counts records then reports «no hits» for what
+    the source called an error.
+
+    Measured on 2026-10-04 (recording run 37201829767):
+    `swiss_ip_search_patent_publications` gets
+
+        <Result success="false"><Log><LogEntry level="ERROR" code="FAIL_PARSE">
+        action parsing failed: ... could not parse the action
+        PatentPublicationSearch</LogEntry></Log></Result>
+
+    and has reported «nothing found» for it ever since. A fault dressed as an
+    answer is the mirror image of the rule in CLAUDE.md part 1: what decides is
+    never the status code, but whether the source answered at all.
+    """
+    result = _result_element(root)
+    if result is None:
+        raise ValueError("Antwort ohne Result-Element — die Quelle hat nicht geantwortet, wie sie soll")
+    if (result.get("success") or "").strip().lower() == "false":
+        meldungen = [
+            f"{el.get('level') or '?'}/{el.get('code') or '?'}: {_text(el)}" for el in _find_all(root, "LogEntry")
+        ]
+        grund = "; ".join(meldungen) if meldungen else "ohne Log-Eintrag"
+        raise ValueError(f"Die Quelle hat die Anfrage abgelehnt (success=false) — {grund}")
+
+
+def _records(root: ET.Element) -> list[ET.Element]:
+    """The record elements of a result page.
+
+    A record is a **direct child of `Result` carrying `role="item"`** — in the
+    trademark register a `Data`, for patents and SPC a `DataBag`. Measured on
+    2026-10-04 against recorded responses (`tests/fixtures/live/`).
+
+    Why not the payload element names: `BibliographicData` appears **4 times
+    for 3 records** in a patent response, because one sits nested inside
+    `PatentPublication`. Counting payloads counts wrong. `role="item"` is the
+    delimiter the source itself sets, and it also excludes the quota response,
+    whose `Data` carries `role="quota"`.
+    """
+    result = _result_element(root)
+    if result is None:
+        return []
+    return [kind for kind in result if (kind.get("role") or "") == "item"]
+
+
+def _record_to_dict(record: ET.Element) -> dict:
+    """One record as a dict, keyed by the schema names of its payloads.
+
+    A trademark record holds its payload directly (`Data` → `Trademark`); a
+    patent or SPC record wraps each payload in a `Data` with its own `role`.
+    Keyed by element name rather than by that `role`, because the two disagree:
+    an SPC record carries `role="LegalStatusData"` around an element named
+    `PatentLegalStatusData`.
+    """
+    payloads: dict = {}
+    for kind in record:
+        inner = list(kind) if _local(kind.tag) == "Data" else [kind]
+        for el in inner:
+            payloads[_local(el.tag)] = _el_to_dict(el)
+    return payloads
+
+
 def _parse_result_page(root: ET.Element) -> SearchEnvelope:
-    """Extract items and pagination info into a typed envelope (SDK-002)."""
-    items = []
-    for item_el in _find_all(root, "Item"):
-        items.append(_el_to_dict(item_el))
+    """Extract records and paging info into a typed envelope (SDK-002).
 
-    # Continuation / next page token
-    next_token = None
-    for cont in _find_all(root, "Continuation"):
-        # The continuation element typically holds child actions; extract token
-        tok_el = cont.find(".//{*}Page")
-        if tok_el is not None:
-            next_token = tok_el.get("token")
-        break
+    Rewritten on 2026-10-04 after the first run with real credentials. The
+    previous version looked for `Item` elements and a `Meta/TotalCount`; the
+    source has neither. It therefore returned `count=0, total=None` for every
+    answer, including ones carrying three records and a six-digit total — and
+    the handwritten fixtures asserted the same wrong names, so no unit test
+    could tell (runs 37198882345 and 37198983962).
+    """
+    _assert_result_ok(root)
 
-    # Meta element with total count
+    records = _records(root)
+    items = [_record_to_dict(record) for record in records]
+
     total = None
-    for meta in _find_all(root, "Meta"):
-        total_el = meta.find(".//{*}TotalCount")
-        if total_el is not None:
-            total = _text(total_el)
-        break
+    result = _result_element(root)
+    if result is not None:
+        for meta in result:
+            if _local(meta.tag) != "Meta":
+                continue
+            for el in meta:
+                if _local(el.tag) == "TotalItemCount":
+                    total = _text(el)
+            break
 
+    # `next_page_token` stays None on purpose until the paging mechanism is
+    # fixed. The token lives in the TEXT of `Continuations/Continuation`, but
+    # passing it back as `<Page token="...">` — what the request builders do —
+    # is not how the source continues a traversal: its documentation copies the
+    # whole `Continuation` element into the next `ApiRequest` as an action.
+    # Measured on 2026-10-04: page 2 came back carrying the very same records
+    # as page 1. Handing that token out invites an endless loop over page one,
+    # so it is withheld rather than published broken.
     count = len(items)
     # ARCH-003: match_type signals whether the search matched, so the LLM can
     # react instead of reading a bare empty list. Number lookups override it.
@@ -391,7 +476,7 @@ def _parse_result_page(root: ET.Element) -> SearchEnvelope:
         count=count,
         match_type="exact" if count else "none",
         results=items,
-        next_page_token=next_token,
+        next_page_token=None,
         suggestion=_NO_MATCH_SUGGESTION if count == 0 else None,
     )
 

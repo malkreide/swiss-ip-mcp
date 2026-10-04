@@ -381,6 +381,60 @@ Jede Zeile, die der Diff zeigt, braucht einen CHANGELOG-Eintrag. Was er nicht
 zeigt, deckt er nicht ab: Verhaltensänderungen im Code selbst stehen nie in
 `Requires-Dist` — für die bleibt es beim Lesen von `git log -- src/`.
 
+**Der Parser hat die Quelle nie getroffen — und kein Test konnte das sehen.**
+Am 4.10.2026 liefen die Live-Tests erstmals mit echten Zugangsdaten.
+`_parse_result_page` suchte Satzelemente `Item` und einen Zaehler
+`Meta/TotalCount`; die Quelle folgt WIPO ST.96 und kennt beides nicht. Ein Satz
+ist ein direktes Kind von `Result` mit `role="item"` — bei Marken ein `Data`,
+bei Patenten und SPC ein `DataBag` —, der Zaehler heisst `Meta/TotalItemCount`.
+Jede Antwort kam als `count: 0, total: null` an, auch die mit drei Saetzen und
+201798 Treffern.
+
+Es war **keine Drift**. Es war von Anfang an falsch, und unsichtbar, weil die
+handgeschriebenen Fixtures dieselben falschen Namen nannten wie der Parser.
+171 gruene Unit-Tests, und die einzige Zusicherung gegen die echte Quelle —
+`assert result["count"] > 0` — war die, die fiel. Genau der Mechanismus, vor
+dem Teil 1 unter «Tests» warnt; hier steht er als Rechnung, nicht als Warnung.
+
+Drei Handgriffe daraus:
+
+- **Satzgrenze ist, was die Quelle markiert, nicht was der Payload heisst.**
+  `BibliographicData` kommt in einer Patent-Antwort 4× bei 3 Saetzen vor; eines
+  steckt in `PatentPublication`. Wer Payloads zaehlt, zaehlt falsch.
+- **Ein handgeschriebenes Beispiel wird gegen die Aufzeichnung gehalten, nicht
+  statt ihr.** `TestBeispieleStimmenMitDerAufzeichnung` faellt, wenn beide
+  auseinandergehen; ohne so eine Kopplung ist das Beispiel wieder nur die
+  Annahme seines Autors.
+- **Was synthetisch aussieht, beschreibt eine Stelle.** Der Rekorder sagt es
+  (`ist_synthetisch`), die Zusicherung im Repo fragt ihn. Zwei Beschreibungen
+  desselben Musters gehen auseinander — am 4.10.2026 galt `MUST`, ein
+  abgeschnittenes `MUSTER`, als Registerinhalt.
+
+**Und ein `success="false"` ist kein leeres Ergebnis.** Die API antwortet auf
+eine Anfrage, die sie nicht parsen kann, mit HTTP **200** und
+`<Result success="false">` plus `Log`. `raise_for_status()` ist damit zufrieden.
+`swiss_ip_search_patent_publications` bekommt seit je
+`could not parse the action PatentPublicationSearch` und gab das als «nichts
+gefunden» weiter. Das ist der 403-Absatz aus Teil 1, eine Ebene tiefer: nicht
+der Statuscode entscheidet, sondern ob die Quelle die Frage beantwortet hat.
+
+**Die Pagination war eine Attrappe.** Der Token steht im Textinhalt von
+`Continuations/Continuation`; der Code gab ihn als `<Page token="...">` zurueck,
+und Seite 2 trug dieselben Saetze wie Seite 1. Die Doku sagt, warum:
+`Continuation` gehoert zur `AbstractAction`-Gruppe und wird als ganzes Element
+in die naechste `ApiRequest` kopiert. Bis das umgebaut ist, gibt der Server
+`next_page_token: null` — ein Token, der die erste Seite endlos wiederholt, ist
+schaedlicher als keiner.
+
+**Messen geht von Hand, nicht nebenbei.** `scripts/probe_response_shape.py`
+berichtet die Form einer echten Antwort (Pfade, Attributnamen, Textlaengen,
+`TotalCount`-Wert), `scripts/record_live_fixtures.py` zeichnet sie auf (echte
+Form, synthetische Texte, Selbstkontrolle vor dem Schreiben). Beide laufen ueber
+`shape-probe.yml` per `workflow_dispatch`, Ausgabe als Log bzw. Artifact. Ein
+neuer Workflow ist erst dispatchbar, wenn seine Datei auf dem Default-Branch
+liegt (`404` sonst); die **Inputs** dagegen werden gegen die Fassung des `ref`
+geprueft, dort laesst sich also auf einem Branch iterieren.
+
 **Live-Tests: geplanter Workflow vorhanden.** `.github/workflows/live.yml`,
 `cron: "0 3 * * 1"` plus `workflow_dispatch`. Die Live-Suite ist also nicht bloss
 per `-m "not live"` ausgeschlossen — DRIFT-005 ist hier erfüllt. `schedule`

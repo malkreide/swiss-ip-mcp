@@ -7,13 +7,24 @@ Aufgezeichnet am **2026-08-08**.
 Ohne Datum ist «gemessen» nach zwei Jahren von «angenommen» nicht mehr
 zu unterscheiden — die Datei sieht gleich aus.
 
-## Aufgezeichnet ist die Adressliste, nicht die Antwort
+## Seit dem 4.10.2026 sind auch die Antworten aufgezeichnet
 
-Die Swissreg-API verlangt Zugangsdaten; ohne sie gibt es keine Antwort,
-die man datieren koennte. Pruefbar ist trotzdem, ob die Adressen, der
-Realm und der Client stimmen — **und sie stimmen alle.** Das Ergebnis
-ist ein Nullbefund und steht genau deshalb hier: Ohne Aufzeichnung
-faengt der naechste Durchgang bei null an.
+Diese Datei beschreibt die Adressliste, aufgenommen ohne Zugangsdaten.
+Die Antworten der Swissreg-API liegen seit dem 4.10.2026 daneben, in
+`live/`, mit eigener `RECORDING.md`: echte Form, synthetische Texte.
+
+**Was das Warten gekostet hat, steht dort.** Solange keine Antwort
+aufgezeichnet war, nannten die handgeschriebenen Fixtures die
+Satzelemente `Item` und den Zaehler `TotalCount` — genau wie der Parser
+sie suchte. Beide irrten gleich, und jedes Suchwerkzeug lieferte null
+Treffer, waehrend 171 Unit-Tests gruen blieben.
+
+## Aufgezeichnet ist hier die Adressliste
+
+Pruefbar war auch ohne Zugangsdaten, ob die Adressen, der Realm und der
+Client stimmen — **und sie stimmen alle.** Das Ergebnis ist ein
+Nullbefund und steht genau deshalb hier: Ohne Aufzeichnung faengt der
+naechste Durchgang bei null an.
 
 ## Drei Wege, weil einer nicht getragen haette
 
