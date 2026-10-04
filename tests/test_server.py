@@ -13,6 +13,7 @@ from collections.abc import Mapping
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+import pytest_asyncio
 
 from swiss_ip_mcp.server import (
     _build_patent_search,
@@ -994,6 +995,43 @@ class TestCredentialsSecret:
             srv._load_credentials()
 
 
+class TestLiveLoopScope:
+    """Die Live-Tests teilen eine Event-Loop, und der Client wird aufgeraeumt.
+
+    Beides ist von aussen nicht sichtbar — ohne Zugangsdaten laeuft kein
+    Live-Test, und mit ihnen faellt der Fehler erst beim zweiten. Diese beiden
+    Zusicherungen halten die Marke fest, damit sie nicht beim naechsten
+    Umbau still verschwindet.
+    """
+
+    def test_every_live_test_shares_the_class_loop(self):
+        # Keine Anzahl zusichern, sondern «alle»: Ein fuenfter Live-Test soll
+        # diesen Test nicht umwerfen, ein unmarkierter dagegen sofort.
+        names = [n for n in dir(TestLiveApi) if n.startswith("test_live_")]
+        assert names, "keine Live-Tests gefunden — der Praefix hat sich bewegt"
+        for name in names:
+            marks = [m for m in getattr(TestLiveApi, name).pytestmark if m.name == "asyncio"]
+            assert marks, f"{name} traegt keine asyncio-Marke"
+            for mark in marks:
+                assert mark.kwargs.get("loop_scope") == "class", name
+
+    def test_live_client_fixture_is_class_scoped(self):
+        # Die Fixture schliesst den Client innerhalb der Klassen-Loop. Laeuft
+        # sie je Test, holt jeder Test ein eigenes Token — wovon die
+        # API-Dokumentation abraet.
+        #
+        # Gelesen wird ein privates pytest-Feld, weil es kein oeffentliches
+        # gibt. Es heisst nicht in jeder Version gleich (pytest 9:
+        # `_fixture_function_marker`, frueher `_pytestfixturefunction`), also
+        # werden beide Namen versucht und das Fehlen gemeldet, statt den Test
+        # an einer Version haengen zu lassen.
+        fixture = TestLiveApi._live_client
+        marker = getattr(fixture, "_fixture_function_marker", None) or getattr(fixture, "_pytestfixturefunction", None)
+        assert marker is not None, "pytest hat das Fixture-Feld umbenannt — Zusicherung nachziehen"
+        assert marker.scope == "class"
+        assert marker.autouse is True
+
+
 class TestLiveMarkerPrecondition:
     """Die Vorbedingung der Live-Suite deckt sich mit der von `_load_credentials`.
 
@@ -1167,7 +1205,47 @@ class TestRespxHttpPath:
 @pytest.mark.live
 @pytest.mark.skipif(not LIVE, reason="IGE_USERNAME/IGE_PASSWORD not set – skipping live tests")
 class TestLiveApi:
-    @pytest.mark.asyncio
+    """Eine Event-Loop fuer die ganze Klasse — so wie im Betrieb.
+
+    `_client` ist ein Modul-Global, das `_get_client()` einmal anlegt und
+    wiederverwendet; `is_closed` ist die einzige Bedingung fuer einen Neubau.
+    Eine Verbindung im Pool gehoert aber der Loop, die sie geoeffnet hat, und
+    `pytest-asyncio` gibt jedem Test standardmaessig eine eigene. Der zweite
+    Test griff damit auf eine Verbindung aus einer geschlossenen Loop:
+
+        RuntimeError: Event loop is closed
+
+    Gemessen im Lauf 37197766646 (4.10.2026), dem ersten mit echten
+    Zugangsdaten: `test_live_patent_search` und `test_live_quota` fielen daran,
+    `test_live_spc_search` lief gruen durch, weil der Pool zwischendurch eine
+    neue Verbindung aufbaute — rot, rot, gruen, rot aus einem Fehler, der mit
+    swissreg.ch nichts zu tun hat.
+
+    Im Betrieb tritt das nicht auf: `_lifespan` besitzt eine Loop fuer den
+    ganzen Prozess. Also wird hier dieselbe Lage hergestellt, statt den Client
+    je Test wegzuwerfen — das haette auch je Test ein neues Token geholt, und
+    davon raet die API-Dokumentation ausdruecklich ab.
+    """
+
+    @pytest_asyncio.fixture(scope="class", loop_scope="class", autouse=True)
+    async def _live_client(self):
+        # Vorher aufraeumen, nicht nur nachher: Ein Unit-Test kann einen Client
+        # aus seiner eigenen Loop hinterlassen haben, und der ist hier so tot
+        # wie der aus dem Fehler oben.
+        import swiss_ip_mcp.server as srv
+
+        srv._client = None
+        srv._token_cache["token"] = None
+        srv._token_cache["expires_at"] = 0.0
+        yield
+        # Schliessen innerhalb der Klassen-Loop, solange sie noch laeuft.
+        if srv._client is not None:
+            await srv._client.aclose()
+        srv._client = None
+        srv._token_cache["token"] = None
+        srv._token_cache["expires_at"] = 0.0
+
+    @pytest.mark.asyncio(loop_scope="class")
     async def test_live_trademark_search(self):
         from swiss_ip_mcp.server import TrademarkSearchInput
 
@@ -1177,7 +1255,7 @@ class TestLiveApi:
         assert "error" not in result
         assert result["count"] > 0
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio(loop_scope="class")
     async def test_live_patent_search(self):
         from swiss_ip_mcp.server import PatentSearchInput
 
@@ -1186,7 +1264,7 @@ class TestLiveApi:
         result = result_str.model_dump(exclude_none=True)
         assert "error" not in result
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio(loop_scope="class")
     async def test_live_spc_search(self):
         from swiss_ip_mcp.server import SpcSearchInput
 
@@ -1195,7 +1273,7 @@ class TestLiveApi:
         result = result_str.model_dump(exclude_none=True)
         assert "error" not in result
 
-    @pytest.mark.asyncio
+    @pytest.mark.asyncio(loop_scope="class")
     async def test_live_quota(self):
         result_str = await swiss_ip_get_quota()
         result = result_str.model_dump(exclude_none=True)
