@@ -113,6 +113,43 @@ def id_kandidaten(satz: ET.Element) -> list[tuple[str, str]]:
     return kandidaten
 
 
+NS_PUB = "urn:ige:schema:xsd:datadeliverypatentpublication-1.0.0"
+
+
+def publikations_rumpfe(ns_core: str, ns_common: str, ns_pat: str) -> list[tuple[str, str]]:
+    """(Beschreibung, vollstaendige Anfrage) je Rumpf-Variante.
+
+    Als Modulfunktion, nicht als Schleife im Messlauf: Eine Liste von Tupeln
+    verschiedener Laenge faellt sonst erst in der CI auf, mit Zugangsdaten und
+    nach zwei Minuten Wartezeit — am 4.10.2026 genau so passiert
+    (`ValueError: too many values to unpack`, Lauf 37204275286). `praefix`
+    wird jetzt aus der Variante abgeleitet und nicht danebengelegt, wo es
+    auseinanderlaufen kann.
+    """
+    varianten = [
+        ("pat: (heute)", "pat:"),
+        ("ohne Praefix, common", ""),
+        ("eigener Publikations-Namespace", "pub:"),
+    ]
+    out = []
+    for beschreibung, praefix in varianten:
+        element = f"{praefix}PatentPublicationSearchRequest"
+        xml = (
+            '<?xml version="1.0" encoding="UTF-8"?>\n'
+            f'<ApiRequest xmlns="{ns_core}" xmlns:pat="{ns_pat}" xmlns:pub="{NS_PUB}">\n'
+            '  <Action type="PatentPublicationSearch">\n'
+            f'    <{element} xmlns="{ns_common}">\n'
+            '      <Representation details="Maximal"/>\n'
+            '      <Page size="3"/>\n'
+            "      <Query><Any>Roche*</Any></Query>\n"
+            f"    </{element}>\n"
+            "  </Action>\n"
+            "</ApiRequest>"
+        )
+        out.append((beschreibung, xml))
+    return out
+
+
 async def _messen(was: str) -> int:
     import swiss_ip_mcp.server as srv
     from swiss_ip_mcp.server import (
@@ -245,30 +282,7 @@ async def _messen(was: str) -> int:
         print("Die Fehlermeldungen unterscheiden sich: unbekannte Namen geben")
         print("«unsupported action type», `PatentPublicationSearch` dagegen")
         print("«could not parse the action». Der Name stimmt also, der Rumpf nicht.\n")
-        NS_PUB = "urn:ige:schema:xsd:datadeliverypatentpublication-1.0.0"
-        rumpfe = [
-            ("pat: (heute)", f'<pat:PatentPublicationSearchRequest xmlns="{NS_COMMON}">', "pat:"),
-            ("ohne Praefix, common", f'<PatentPublicationSearchRequest xmlns="{NS_COMMON}">', ""),
-            (
-                "eigener Publikations-Namespace",
-                f'<pub:PatentPublicationSearchRequest xmlns="{NS_COMMON}">',
-                "pub:",
-                NS_PUB,
-            ),
-        ]
-        for beschreibung, oeffnen, praefix in rumpfe:
-            xml = (
-                '<?xml version="1.0" encoding="UTF-8"?>\n'
-                f'<ApiRequest xmlns="{NS_CORE}" xmlns:pat="{NS_PAT}" xmlns:pub="{NS_PUB}">\n'
-                '  <Action type="PatentPublicationSearch">\n'
-                f"    {oeffnen}\n"
-                '      <Representation details="Maximal"/>\n'
-                '      <Page size="3"/>\n'
-                "      <Query><Any>Roche*</Any></Query>\n"
-                f"    </{praefix}PatentPublicationSearchRequest>\n"
-                "  </Action>\n"
-                "</ApiRequest>"
-            )
+        for beschreibung, xml in publikations_rumpfe(NS_CORE, NS_COMMON, NS_PAT):
             try:
                 root = await _call_api(xml)
             except Exception as exc:
