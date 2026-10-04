@@ -18,12 +18,14 @@ import pytest
 import pytest_asyncio
 
 from swiss_ip_mcp.server import (
+    _build_patent_pub_search,
     _build_patent_search,
     _build_spc_search,
     _build_trademark_search,
     _esc,
     _handle_error,
     _local,
+    _page_request,
     _parse_result_page,
     _quota_request,
     swiss_ip_get_patent,
@@ -167,9 +169,58 @@ class TestXmlHelpers:
         assert "<Any>test</Any>" in xml
         assert 'size="10"' in xml
 
-    def test_build_trademark_search_pagination(self):
-        xml = _build_trademark_search("<Any>test</Any>", page_token="abc123")
-        assert 'token="abc123"' in xml
+    def test_folgeseite_ist_eine_continuation_action(self):
+        # Gemessen am 4.10.2026 (Lauf 37204457180): Der Token als
+        # `<Page token=...>` wird ignoriert, Seite 2 kam als Seite 1 zurueck.
+        # Die Quelle setzt `Continuation` an die Stelle der Action.
+        xml = _page_request(_build_trademark_search, "<Any>test</Any>", 10, "abc123")
+        assert "<Continuation" in xml
+        assert "abc123" in xml
+        assert "TrademarkSearch" not in xml, "die Folgeseite traegt keine Suchanfrage mehr"
+
+    def test_erste_seite_ist_eine_suchanfrage(self):
+        xml = _page_request(_build_trademark_search, "<Any>test</Any>", 10, None)
+        assert "TrademarkSearch" in xml
+        assert "<Continuation" not in xml
+
+    def test_kein_token_attribut_mehr_am_page_element(self):
+        # Gegen den Rueckfall: Das Attribut tat nichts und sah aus, als taete
+        # es etwas. Keiner der Builder darf es wieder bauen.
+        for xml in (
+            _build_trademark_search("<Any>x</Any>", 3),
+            _build_patent_search("<Any>x</Any>", 3),
+            _build_spc_search("<Any>x</Any>", 3),
+            _build_patent_pub_search("<Any>x</Any>", 3),
+        ):
+            assert "token=" not in xml, xml
+
+    def test_publikationssuche_nutzt_ihren_eigenen_namespace(self):
+        # Mit dem Patent-Namespace antwortet die Quelle
+        # `could not parse the action PatentPublicationSearch` bei HTTP 200.
+        xml = _build_patent_pub_search("<Any>x</Any>", 3)
+        assert "datadeliverypatentpublication-1.0.0" in xml
+        assert 'type="PatentPublicationSearch"' in xml
+
+    def test_nummernabfrage_traegt_den_register_namespace(self):
+        # Die Quelle nannte es selbst: `ApplicationNumber` gehoert in den
+        # Register-Namespace, nicht in den common. `<Id>` fand nie etwas.
+        from swiss_ip_mcp.server import NS_PAT, NS_TM, _number_query
+
+        marke = _number_query("0012345678", NS_TM, "tm")
+        assert "datadeliverytrademark-1.0.0" in marke
+        assert "<tm:ApplicationNumber" in marke
+        assert "0012345678" in marke
+        assert "<Id>" not in marke
+        patent = _number_query("0012345678", NS_PAT, "pat")
+        assert "datadeliverypatent-1.0.0" in patent
+        assert "<pat:ApplicationNumber" in patent
+
+    def test_nummer_geht_als_text_nicht_als_kind_element(self):
+        # Mit einem `ApplicationNumberText`-Kind antwortet die Quelle
+        # «Element content can not contain child START_ELEMENT».
+        from swiss_ip_mcp.server import NS_TM, _number_query
+
+        assert "ApplicationNumberText" not in _number_query("1", NS_TM, "tm")
 
     def test_build_patent_search(self):
         xml = _build_patent_search("<Any>solar</Any>", page_size=5)
@@ -190,7 +241,7 @@ class TestXmlHelpers:
         result = _parse_result_page(root)
         assert result.count == 2
         assert result.total == "42"
-        assert result.next_page_token is None
+        assert result.next_page_token == "TOKEN-AUS-DEM-TEXTINHALT"
 
     def test_parse_result_page_empty(self):
         root = _make_root(SAMPLE_EMPTY_XML)
@@ -1388,14 +1439,17 @@ class TestParserGegenAufzeichnung:
         assert "FAIL_PARSE" in str(ei.value)
         assert "PatentPublicationSearch" in str(ei.value)
 
-    def test_kein_seitentoken_bevor_die_mechanik_stimmt(self):
-        # Seite 2 trug am 4.10.2026 dieselben Saetze wie Seite 1: Der Token aus
-        # `Continuations/Continuation` wirkt als `<Page token=...>` nicht. Bis
-        # das behoben ist, ist ein zurueckgehaltener Token besser als eine
-        # Einladung zur Endlosschleife.
+    def test_seitentoken_kommt_aus_dem_textinhalt(self):
+        # Der Token steht im TEXT von `Continuations/Continuation`, nicht in
+        # einem Attribut. Er wurde zurueckgehalten, solange er als
+        # `<Page token=...>` zurueckging und Seite 1 endlos wiederholte; seit
+        # der Umstellung auf `Continuation` als Action traegt Seite 2 andere
+        # Saetze (gemessen, Lauf 37204457180).
         root = _fixture("trademark-search.xml")
-        assert any(_local(el.tag) == "Continuation" for el in root.iter())
-        assert _parse_result_page(root).next_page_token is None
+        cont = next(el for el in root.iter() if _local(el.tag) == "Continuation")
+        token = _parse_result_page(root).next_page_token
+        assert token == (cont.text or "").strip()
+        assert token
 
 
 class TestBeispieleStimmenMitDerAufzeichnung:

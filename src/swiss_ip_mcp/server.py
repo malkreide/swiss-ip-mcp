@@ -61,6 +61,11 @@ NS_COMMON = "urn:ige:schema:xsd:datadeliverycommon-1.0.0"
 NS_TM = "urn:ige:schema:xsd:datadeliverytrademark-1.0.0"
 NS_PAT = "urn:ige:schema:xsd:datadeliverypatent-1.0.0"
 NS_SPC = "urn:ige:schema:xsd:datadeliveryspc-1.0.0"
+# Die Publikationssuche hat ihr eigenes Schema. Mit dem Patent-Namespace
+# antwortet die Quelle `could not parse the action PatentPublicationSearch`
+# bei HTTP 200 — gemessen am 4.10.2026, Lauf 37204457180; mit diesem hier
+# `success=true` und 39578 Treffer.
+NS_PAT_PUB = "urn:ige:schema:xsd:datadeliverypatentpublication-1.0.0"
 
 DEFAULT_PAGE_SIZE = 10
 REQUEST_TIMEOUT = 60.0
@@ -223,13 +228,10 @@ def _esc(text: str) -> str:
 def _build_trademark_search(
     query_xml: str,
     page_size: int = DEFAULT_PAGE_SIZE,
-    page_token: Optional[str] = None,
     sort: str = "LastUpdateSort",
     sort_dir: str = "Descending",
 ) -> str:
     page_el = f'<Page size="{page_size}"/>'
-    if page_token:
-        page_el = f'<Page size="{page_size}" token="{_esc(page_token)}"/>'
     return f"""<?xml version="1.0" encoding="UTF-8"?>
 <ApiRequest xmlns="{NS_CORE}" xmlns:tm="{NS_TM}">
   <Action type="TrademarkSearch">
@@ -246,13 +248,10 @@ def _build_trademark_search(
 def _build_patent_search(
     query_xml: str,
     page_size: int = DEFAULT_PAGE_SIZE,
-    page_token: Optional[str] = None,
     sort: str = "LastUpdateSort",
     sort_dir: str = "Descending",
 ) -> str:
     page_el = f'<Page size="{page_size}"/>'
-    if page_token:
-        page_el = f'<Page size="{page_size}" token="{_esc(page_token)}"/>'
     return f"""<?xml version="1.0" encoding="UTF-8"?>
 <ApiRequest xmlns="{NS_CORE}" xmlns:pat="{NS_PAT}">
   <Action type="PatentSearch">
@@ -269,20 +268,17 @@ def _build_patent_search(
 def _build_patent_pub_search(
     query_xml: str,
     page_size: int = DEFAULT_PAGE_SIZE,
-    page_token: Optional[str] = None,
 ) -> str:
     page_el = f'<Page size="{page_size}"/>'
-    if page_token:
-        page_el = f'<Page size="{page_size}" token="{_esc(page_token)}"/>'
     return f"""<?xml version="1.0" encoding="UTF-8"?>
-<ApiRequest xmlns="{NS_CORE}" xmlns:pat="{NS_PAT}">
+<ApiRequest xmlns="{NS_CORE}" xmlns:pub="{NS_PAT_PUB}">
   <Action type="PatentPublicationSearch">
-    <pat:PatentPublicationSearchRequest xmlns="{NS_COMMON}">
+    <pub:PatentPublicationSearchRequest xmlns="{NS_COMMON}">
       <Representation details="Maximal"/>
       {page_el}
       <Query>{query_xml}</Query>
       <Sort><LastUpdateSort>Descending</LastUpdateSort></Sort>
-    </pat:PatentPublicationSearchRequest>
+    </pub:PatentPublicationSearchRequest>
   </Action>
 </ApiRequest>"""
 
@@ -290,11 +286,8 @@ def _build_patent_pub_search(
 def _build_spc_search(
     query_xml: str,
     page_size: int = DEFAULT_PAGE_SIZE,
-    page_token: Optional[str] = None,
 ) -> str:
     page_el = f'<Page size="{page_size}"/>'
-    if page_token:
-        page_el = f'<Page size="{page_size}" token="{_esc(page_token)}"/>'
     return f"""<?xml version="1.0" encoding="UTF-8"?>
 <ApiRequest xmlns="{NS_CORE}" xmlns:spc="{NS_SPC}">
   <Action type="SPCSearch">
@@ -306,6 +299,71 @@ def _build_spc_search(
     </spc:SPCSearchRequest>
   </Action>
 </ApiRequest>"""
+
+
+def _number_query(number: str, namespace: str, prefix: str) -> str:
+    """An exact lookup by application number (DRIFT-006).
+
+    The number field lives in the **register's own** namespace, and the source
+    said so itself. On `<ApplicationNumber>` in the common namespace it answers
+
+        unexpected element: {...datadeliverycommon-1.0.0}ApplicationNumber
+        Maybe misspelled?
+          - {...datadeliverytrademark-1.0.0}ApplicationNumber
+
+    The builders put `xmlns="{NS_COMMON}"` on the request element, so a bare
+    `<ApplicationNumber>` lands in the wrong namespace. Measured 2026-10-04
+    (runs 37204457180, 37204541287, 37204640122):
+
+    - `<Id>` — the element this server used — returns `total=0` for every
+      number form taken from a real record. It is not the field for register
+      numbers.
+    - `tm:`/`pat:`/`spc:ApplicationNumber` each return exactly one record.
+    - The number goes in as plain text; a nested `ApplicationNumberText` child
+      fails to parse.
+    - `RegistrationNumber` does not exist as a query field, in either
+      namespace. A trademark cannot be looked up by its registration number.
+    - `<Any>` with a number does find something (397 and 2 hits), but that is
+      full text across all fields, not identity — a silent imprecision if used
+      as a substitute.
+    """
+    return f'<{prefix}:ApplicationNumber xmlns:{prefix}="{namespace}">{_esc(number)}</{prefix}:ApplicationNumber>'
+
+
+def _page_request(build, query_xml: str, page_size: int, page_token: Optional[str], **kw) -> str:
+    """First page: a search request. Follow-up page: a continuation action.
+
+    One place decides, for all ten search tools. The builders no longer take a
+    token at all: `<Page token="...">` did nothing (the source ignores it, and
+    page 2 came back as page 1), and a parameter that does nothing invites
+    being used again.
+    """
+    if page_token:
+        return _build_continuation(page_token)
+    return build(query_xml, page_size, **kw)
+
+
+def _build_continuation(token: str, name: str = "NextPage") -> str:
+    """The follow-up request for the next page of a traversal (DRIFT-006).
+
+    `Continuation` is an **action**, not a parameter: the documentation copies
+    the whole element from the response into the next `ApiRequest`, where an
+    `Action` would otherwise sit — «Da `api:Continuation` Elemente der
+    `api:AbstractAction`-Gruppe angehoeren, koennen diese Elemente direkt von
+    der `api:ApiResponse` zur naechsten `api:ApiRequest` uebertragen werden.»
+
+    Passing the token as `<Page token="...">` instead — what this server did
+    until 2026-10-04 — is silently ignored: measured that day, page 2 came
+    back carrying the very same records as page 1, while the documented form
+    returned different ones. Both forms ran in the same measurement, so the
+    comparison is not from memory (run 37204457180).
+    """
+    return (
+        '<?xml version="1.0" encoding="UTF-8"?>\n'
+        f'<ApiRequest xmlns="{NS_CORE}">\n'
+        f'  <Continuation name="{_esc(name)}">{_esc(token)}</Continuation>\n'
+        "</ApiRequest>"
+    )
 
 
 def _quota_request() -> str:
@@ -459,14 +517,22 @@ def _parse_result_page(root: ET.Element) -> SearchEnvelope:
                     total = _text(el)
             break
 
-    # `next_page_token` stays None on purpose until the paging mechanism is
-    # fixed. The token lives in the TEXT of `Continuations/Continuation`, but
-    # passing it back as `<Page token="...">` — what the request builders do —
-    # is not how the source continues a traversal: its documentation copies the
-    # whole `Continuation` element into the next `ApiRequest` as an action.
-    # Measured on 2026-10-04: page 2 came back carrying the very same records
-    # as page 1. Handing that token out invites an endless loop over page one,
-    # so it is withheld rather than published broken.
+    # The token lives in the TEXT of `Continuations/Continuation`, and it is
+    # handed back through `_build_continuation` — not as `<Page token="...">`,
+    # which the source ignores (see that builder). It was withheld entirely
+    # while the mechanism was wrong, because a token that repeats page one for
+    # ever is worse than none.
+    next_token = None
+    if result is not None:
+        for conts in result:
+            if _local(conts.tag) != "Continuations":
+                continue
+            for cont in conts:
+                if _local(cont.tag) == "Continuation" and _text(cont):
+                    next_token = _text(cont)
+                    break
+            break
+
     count = len(items)
     # ARCH-003: match_type signals whether the search matched, so the LLM can
     # react instead of reading a bare empty list. Number lookups override it.
@@ -476,7 +542,7 @@ def _parse_result_page(root: ET.Element) -> SearchEnvelope:
         count=count,
         match_type="exact" if count else "none",
         results=items,
-        next_page_token=None,
+        next_page_token=next_token,
         suggestion=_NO_MATCH_SUGGESTION if count == 0 else None,
     )
 
@@ -862,7 +928,7 @@ async def swiss_ip_search_trademarks(params: TrademarkSearchInput, ctx: Optional
     """
     sort_dir = "Descending" if params.sort_descending else "Ascending"
     query_xml = f"<Any>{_esc(params.query)}</Any>"
-    xml_body = _build_trademark_search(query_xml, params.page_size, params.page_token, sort_dir=sort_dir)
+    xml_body = _page_request(_build_trademark_search, query_xml, params.page_size, params.page_token, sort_dir=sort_dir)
     try:
         root = await _call_api(xml_body, ctx)
         result = _parse_result_page(root)
@@ -902,7 +968,7 @@ async def swiss_ip_search_trademarks_by_owner(
     # Trademark owner fields are searched via Any (the API's full-text field
     # covers holder/applicant names in the index).
     query_xml = f"<Any>{_esc(params.owner_name)}</Any>"
-    xml_body = _build_trademark_search(query_xml, params.page_size, params.page_token)
+    xml_body = _page_request(_build_trademark_search, query_xml, params.page_size, params.page_token)
     try:
         root = await _call_api(xml_body, ctx)
         result = _parse_result_page(root)
@@ -923,19 +989,23 @@ async def swiss_ip_search_trademarks_by_owner(
 )
 @traced_tool
 async def swiss_ip_get_trademark(params: TrademarkNumberInput, ctx: Optional[Context] = None) -> SearchEnvelope:
-    """Ruft eine bestimmte Schweizer Marke anhand der Anmelde-/Registernummer ab.
-    <use_case>Detail-Abruf einer Marke per Anmelde-/Registernummer.</use_case>
-    <important_notes>Exakter Lookup; bei unbekannter Nummer match_type="none".</important_notes>
+    """Ruft eine bestimmte Schweizer Marke anhand der ANMELDENUMMER ab.
+    <use_case>Detail-Abruf einer Marke per Anmeldenummer.</use_case>
+    <important_notes>Exakter Lookup über die Anmeldenummer; bei unbekannter
+    Nummer match_type="none". Die REGISTERNUMMER ist kein Abfragefeld der
+    Quelle (gemessen am 4.10.2026) — dafür die Freitextsuche nutzen, die aber
+    über alle Felder sucht und mehrere Treffer liefern kann.</important_notes>
     Gibt detaillierten Datensatz inkl. Status, Waren-/Dienstleistungsklassen und Registrierungshistorie zurück.
 
     Args:
         params (TrademarkNumberInput): Enthält:
-            - trademark_number (str): Schweizer Markennummer, z.B. 'P-756123'
+            - trademark_number (str): Anmeldenummer der Marke, wie sie ein
+              Suchtreffer unter ApplicationNumber/ApplicationNumberText führt
 
     Returns:
         str: Ergebnis mit source, total, count, results (einzelner Eintrag), next_page_token
     """
-    query_xml = f"<Id>{_esc(params.trademark_number)}</Id>"
+    query_xml = _number_query(params.trademark_number, NS_TM, "tm")
     xml_body = _build_trademark_search(query_xml, page_size=1)
     try:
         root = await _call_api(xml_body, ctx)
@@ -945,7 +1015,9 @@ async def swiss_ip_get_trademark(params: TrademarkNumberInput, ctx: Optional[Con
             # execution error — keep isError=false (OBS-001).
             result.suggestion = None
             result.message = (
-                f"Marke '{params.trademark_number}' nicht gefunden. Bitte Nummernformat prüfen (z.B. 'P-756123')."
+                f"Marke '{params.trademark_number}' nicht gefunden. Erwartet wird die "
+                "Anmeldenummer, wie ein Suchtreffer sie unter ApplicationNumberText führt; "
+                "die Registernummer ist kein Abfragefeld der Quelle."
             )
         return result
     except Exception as e:
@@ -988,7 +1060,7 @@ async def swiss_ip_search_trademarks_by_class(
     else:
         query_xml = class_query
 
-    xml_body = _build_trademark_search(query_xml, params.page_size, params.page_token)
+    xml_body = _page_request(_build_trademark_search, query_xml, params.page_size, params.page_token)
     try:
         root = await _call_api(xml_body, ctx)
         result = _parse_result_page(root)
@@ -1031,7 +1103,7 @@ async def swiss_ip_search_patents(params: PatentSearchInput, ctx: Optional[Conte
     """
     sort_dir = "Descending" if params.sort_descending else "Ascending"
     query_xml = f"<Any>{_esc(params.query)}</Any>"
-    xml_body = _build_patent_search(query_xml, params.page_size, params.page_token, sort_dir=sort_dir)
+    xml_body = _page_request(_build_patent_search, query_xml, params.page_size, params.page_token, sort_dir=sort_dir)
     try:
         root = await _call_api(xml_body, ctx)
         result = _parse_result_page(root)
@@ -1064,7 +1136,7 @@ async def swiss_ip_get_patent(params: PatentNumberInput, ctx: Optional[Context] 
     Returns:
         str: Ergebnis mit source, total, count, results (einzelner Eintrag), next_page_token
     """
-    query_xml = f"<Id>{_esc(params.patent_number)}</Id>"
+    query_xml = _number_query(params.patent_number, NS_PAT, "pat")
     xml_body = _build_patent_search(query_xml, page_size=1)
     try:
         root = await _call_api(xml_body, ctx)
@@ -1109,7 +1181,7 @@ async def swiss_ip_search_patents_by_applicant(
         str: Ergebnis mit source, total, count, results, next_page_token
     """
     query_xml = f"<Any>{_esc(params.applicant_name)}</Any>"
-    xml_body = _build_patent_search(query_xml, params.page_size, params.page_token)
+    xml_body = _page_request(_build_patent_search, query_xml, params.page_size, params.page_token)
     try:
         root = await _call_api(xml_body, ctx)
         result = _parse_result_page(root)
@@ -1147,7 +1219,7 @@ async def swiss_ip_search_patent_publications(
         str: Ergebnis mit source, total, count, results, next_page_token
     """
     query_xml = f"<Any>{_esc(params.query)}</Any>"
-    xml_body = _build_patent_pub_search(query_xml, params.page_size, params.page_token)
+    xml_body = _page_request(_build_patent_pub_search, query_xml, params.page_size, params.page_token)
     try:
         root = await _call_api(xml_body, ctx)
         result = _parse_result_page(root)
@@ -1187,7 +1259,7 @@ async def swiss_ip_search_spc(params: SpcSearchInput, ctx: Optional[Context] = N
         str: Ergebnis mit source, total, count, results (ESZ-Einträge), next_page_token
     """
     query_xml = f"<Any>{_esc(params.query)}</Any>"
-    xml_body = _build_spc_search(query_xml, params.page_size, params.page_token)
+    xml_body = _page_request(_build_spc_search, query_xml, params.page_size, params.page_token)
     try:
         root = await _call_api(xml_body, ctx)
         result = _parse_result_page(root)
@@ -1233,13 +1305,13 @@ async def swiss_ip_search_recent_filings(params: DateRangeInput, ctx: Optional[C
 
     try:
         if params.ip_type == "trademark":
-            xml_body = _build_trademark_search(query_xml, params.page_size, params.page_token)
+            xml_body = _page_request(_build_trademark_search, query_xml, params.page_size, params.page_token)
         elif params.ip_type == "patent":
-            xml_body = _build_patent_search(query_xml, params.page_size, params.page_token)
+            xml_body = _page_request(_build_patent_search, query_xml, params.page_size, params.page_token)
         elif params.ip_type == "patent_publication":
-            xml_body = _build_patent_pub_search(query_xml, params.page_size, params.page_token)
+            xml_body = _page_request(_build_patent_pub_search, query_xml, params.page_size, params.page_token)
         else:  # spc
-            xml_body = _build_spc_search(query_xml, params.page_size, params.page_token)
+            xml_body = _page_request(_build_spc_search, query_xml, params.page_size, params.page_token)
 
         root = await _call_api(xml_body, ctx)
         result = _parse_result_page(root)
