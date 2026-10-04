@@ -16,8 +16,16 @@ name: Antwortform messen
 on:
   workflow_dispatch:
     inputs:
+      mode:
+        description: "messen (Struktur ins Log) oder aufzeichnen (Fixtures als Artifact)"
+        required: false
+        default: messen
+        type: choice
+        options:
+          - messen
+          - aufzeichnen
       only:
-        description: "Welche Abfrage messen"
+        description: "Welche Abfrage messen (nur im Modus messen)"
         required: false
         default: alle
         type: choice
@@ -57,6 +65,7 @@ jobs:
       # uebersprungene Testlauf, vor dem `classify_live_run.py` warnt. Die
       # Sonde endet dann selbst mit 1.
       - name: Sonde
+        if: inputs.mode != 'aufzeichnen'
         env:
           IGE_USERNAME: ${{ secrets.IGE_USERNAME }}
           IGE_PASSWORD: ${{ secrets.IGE_PASSWORD }}
@@ -78,3 +87,34 @@ jobs:
           status=${PIPESTATUS[0]}
           echo '```' >> "$GITHUB_STEP_SUMMARY"
           exit "$status"
+
+      # Der Rekorder schreibt nur, was durch seine eigene Anonymisierungs-
+      # kontrolle kommt; ueberlebt ein Originaltext, laesst er die Datei weg
+      # und sagt das. Kein `continue-on-error`: Nichts aufgezeichnet ist nicht
+      # gruen, und er endet dann selbst mit 1.
+      - name: Aufzeichnen
+        if: inputs.mode == 'aufzeichnen'
+        env:
+          IGE_USERNAME: ${{ secrets.IGE_USERNAME }}
+          IGE_PASSWORD: ${{ secrets.IGE_PASSWORD }}
+        run: |
+          python scripts/record_live_fixtures.py --out fixtures-neu
+          {
+            echo '## Aufgezeichnete Antworten'
+            echo
+            echo '```'
+            ls -l fixtures-neu
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      # Ueber ein Artifact, nicht per Commit aus dem Workflow: Dieser Job hat
+      # `contents: read` und soll es behalten. Die Dateien kommen von Hand ins
+      # Repo, nachdem jemand hineingesehen hat.
+      - name: Aufzeichnung hochladen
+        if: inputs.mode == 'aufzeichnen'
+        uses: actions/upload-artifact@v4
+        with:
+          name: live-fixtures
+          path: fixtures-neu/
+          if-no-files-found: error
+          retention-days: 7
