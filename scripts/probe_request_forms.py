@@ -156,7 +156,10 @@ async def _messen(was: str) -> int:
         NS_COMMON,
         NS_CORE,
         NS_PAT,
+        NS_SPC,
         NS_TM,
+        _build_patent_search,
+        _build_spc_search,
         _build_trademark_search,
         _call_api,
         _esc,
@@ -272,6 +275,41 @@ async def _messen(was: str) -> int:
                         continue
                     print(f"  {beschreibung:38} {befund(root)}")
                     gemessen += 1
+
+    if was in ("alle", "id"):
+        print("\n=== Nummernsuche, Runde 4: gilt dasselbe fuer Patente und SPC? ===")
+        print("`tm:ApplicationNumber` findet genau einen Satz. Ob das Muster")
+        print("«Nummernfeld im Register-Namespace» auch fuer die anderen Register")
+        print("gilt, ist damit NICHT gezeigt — nur fuer Marken.\n")
+        for register, bauer, ns, praefix in (
+            ("Patente", _build_patent_search, NS_PAT, "pat"),
+            ("SPC", _build_spc_search, NS_SPC, "spc"),
+        ):
+            begriff = "Roche*" if register == "Patente" else "Novartis*"
+            try:
+                treffer = await _call_api(bauer(f"<Any>{_esc(begriff)}</Any>", 3))
+            except Exception as exc:
+                print(f"  {register}: Ausgangsabfrage FEHLER {type(exc).__name__}: {exc}")
+                continue
+            nummer = next(
+                (
+                    (el.text or "").strip()
+                    for el in treffer.iter()
+                    if _local(el.tag) == "ApplicationNumberText" and (el.text or "").strip()
+                ),
+                "",
+            )
+            if not nummer:
+                print(f"  {register}: keine ApplicationNumberText im Satz — entfaellt")
+                continue
+            query = f'<{praefix}:ApplicationNumber xmlns:{praefix}="{ns}">{_esc(nummer)}</{praefix}:ApplicationNumber>'
+            try:
+                root = await _call_api(bauer(query, 3))
+            except Exception as exc:
+                print(f"  {register}: {praefix}:ApplicationNumber FEHLER {type(exc).__name__}: {exc}")
+                continue
+            print(f"  {register:10} {praefix}:ApplicationNumber  {befund(root)}")
+            gemessen += 1
 
     if was in ("alle", "pagination"):
         print("\n=== Pagination: Continuation als Action in der Folgeanfrage ===")
