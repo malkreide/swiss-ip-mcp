@@ -58,8 +58,13 @@ import xml.etree.ElementTree as ET
 from datetime import date, timedelta
 from pathlib import Path
 
-# Textknoten, deren Wert echt bleibt: Zaehler, die zur Satzzahl passen muessen.
-KEEP_TEXT_TAGS = frozenset({"TotalItemCount", "ItemCount", "ItemCountOffset"})
+# Textknoten, deren Wert echt bleibt: die Zaehler, die zur Satzzahl passen
+# muessen, und die Fehlermeldungen der Quelle. Letztere beziehen sich auf die
+# eigene Anfrage — sie koennen keine fremden Registerinhalte tragen, und ohne
+# ihren Wortlaut ist ein `FAIL_PARSE` nicht zu beheben. Am 4.10.2026 stand in
+# `patent-publication-search.xml` genau das: ein anonymisierter Fehler, der
+# nichts erklaerte.
+KEEP_TEXT_TAGS = frozenset({"TotalItemCount", "ItemCount", "ItemCountOffset", "LogEntry"})
 
 # Attribute am Wurzelelement, die einen einzelnen Lauf identifizieren.
 SCRUB_ATTRS = frozenset({"requestUuid", "timestamp", "uuid"})
@@ -383,7 +388,7 @@ async def _record(out: Path) -> int:
         ),
         encoding="utf-8",
     )
-    print(f"\n{len(geschrieben)} von {len(auftraege)} Antwort(en) aufgezeichnet.")
+    print(f"\n{len(geschrieben)} Antwort(en) aufgezeichnet.")
     return 0
 
 
