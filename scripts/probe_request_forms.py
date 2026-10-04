@@ -156,6 +156,7 @@ async def _messen(was: str) -> int:
         NS_COMMON,
         NS_CORE,
         NS_PAT,
+        NS_TM,
         _build_trademark_search,
         _call_api,
         _esc,
@@ -226,6 +227,51 @@ async def _messen(was: str) -> int:
                     continue
                 print(f"  {beschreibung:38} {befund(root)}")
                 gemessen += 1
+
+    if was in ("alle", "id"):
+        print("\n=== Nummernsuche, Runde 3: Nummernfeld im Register-Namespace ===")
+        print("Die Quelle nennt die Loesung selbst. Auf das Nummernfeld im")
+        print("common-Namespace antwortet sie:")
+        print("  unexpected element: {...datadeliverycommon-1.0.0}ApplicationNumber")
+        print("  Maybe misspelled?")
+        print("    - {...datadeliverytrademark-1.0.0}ApplicationNumber")
+        print("Also traegt das Feld den Register-Namespace, nicht den common.\n")
+        erste = await _call_api(_build_trademark_search("<Any>Zürich*</Any>", 3))
+        result = next(el for el in erste.iter() if _local(el.tag) == "Result")
+        saetze = [kind for kind in result if (kind.get("role") or "") == "item"]
+        if saetze:
+            anmelde = next(
+                (
+                    (el.text or "").strip()
+                    for el in saetze[0].iter()
+                    if _local(el.tag) == "ApplicationNumberText" and (el.text or "").strip()
+                ),
+                "",
+            )
+            if anmelde:
+                for beschreibung, query in (
+                    (
+                        "tm:ApplicationNumber",
+                        f'<tm:ApplicationNumber xmlns:tm="{NS_TM}">{_esc(anmelde)}</tm:ApplicationNumber>',
+                    ),
+                    (
+                        "tm:ApplicationNumber mit Text-Kind",
+                        f'<tm:ApplicationNumber xmlns:tm="{NS_TM}">'
+                        f"<ApplicationNumberText>{_esc(anmelde)}</ApplicationNumberText>"
+                        "</tm:ApplicationNumber>",
+                    ),
+                    (
+                        "KONTROLLE tm:RegistrationNumber",
+                        f'<tm:RegistrationNumber xmlns:tm="{NS_TM}">{_esc(anmelde)}</tm:RegistrationNumber>',
+                    ),
+                ):
+                    try:
+                        root = await _call_api(_build_trademark_search(query, 3))
+                    except Exception as exc:
+                        print(f"  {beschreibung:38} FEHLER {type(exc).__name__}: {exc}")
+                        continue
+                    print(f"  {beschreibung:38} {befund(root)}")
+                    gemessen += 1
 
     if was in ("alle", "pagination"):
         print("\n=== Pagination: Continuation als Action in der Folgeanfrage ===")
