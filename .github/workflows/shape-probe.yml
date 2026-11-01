@@ -113,7 +113,7 @@ jobs:
       # Repo, nachdem jemand hineingesehen hat.
       - name: Aufzeichnung hochladen
         if: inputs.mode == 'aufzeichnen'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: live-fixtures
           path: fixtures-neu/
